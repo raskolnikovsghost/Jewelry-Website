@@ -591,13 +591,7 @@ function handleAgentMessage(messageText, sourceName = "Simulated Agent") {
   const text = messageText.toLowerCase();
   console.log(`[Parser] Running NLP on message: "${messageText}" from ${sourceName}`);
 
-  // Display message in the developer/simulator panel status block
-  const statusBox = document.getElementById("simFeedback");
-  const statusMsg = document.getElementById("simFeedbackMsg");
-  if (statusBox && statusMsg) {
-    statusBox.style.display = "block";
-    statusMsg.textContent = `"${messageText}"`;
-  }
+
 
   // Action variables
   let actionTaken = false;
@@ -766,37 +760,7 @@ function setupEventListeners() {
     });
   }
 
-  // Simulator Collapsible toggle
-  const simHeader = document.getElementById("simHeader");
-  const simDock = document.getElementById("simDock");
-  if (simHeader && simDock) {
-    simHeader.addEventListener("click", () => {
-      simDock.classList.toggle("collapsed");
-    });
-  }
 
-  // Simulator Presets
-  const presetButtons = document.querySelectorAll(".btn-sim-preset");
-  presetButtons.forEach(btn => {
-    btn.addEventListener("click", () => {
-      const msg = btn.getAttribute("data-msg");
-      if (msg) {
-        handleAgentMessage(msg, "Simulator Preset");
-      }
-    });
-  });
-
-  // Simulator Custom Input Send
-  const btnSimSend = document.getElementById("btnSimSend");
-  const simInput = document.getElementById("simInput");
-  if (btnSimSend && simInput) {
-    btnSimSend.addEventListener("click", sendCustomSimMessage);
-    simInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        sendCustomSimMessage();
-      }
-    });
-  }
 
   // Carousel scroll buttons
   const btnPrev = document.getElementById("carouselPrev");
@@ -815,16 +779,7 @@ function setupEventListeners() {
   }
 }
 
-function sendCustomSimMessage() {
-  const simInput = document.getElementById("simInput");
-  if (!simInput) return;
 
-  const msg = simInput.value.trim();
-  if (msg) {
-    handleAgentMessage(msg, "Simulator Custom Input");
-    simInput.value = "";
-  }
-}
 
 // Modal Toggle Helpers
 function openCart() {
