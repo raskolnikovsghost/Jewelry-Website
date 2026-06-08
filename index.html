@@ -285,29 +285,17 @@
   </div>
 
   <!-- --- SALESFORCE AGENTFORCE HTML SNIPPET --- -->
-  <!-- 
-    PASTE YOUR SALESFORCE EMBEDDED MESSAGE CODE HERE.
-    
-    To link the agent's messages to the website:
-    Our event handlers in app.js are already pre-bound to listen to:
-    1. Modern Agentforce event: "onEmbeddedMessageSent"
-    2. Legacy Chat event: "onAgentMessage" (via embedded_svc.addEventHandler)
-    
-    No modification to the script below is necessary; just paste your code.
-  -->
-  
-  <!-- Example Salesforce Org Placeholder (Remove comments and paste your actual Org code here) -->
-  <!-- 
   <script type='text/javascript'>
     function initEmbeddedMessaging() {
       try {
-        embeddedservice_bootstrap.settings.language = 'en_US'; 
+        embeddedservice_bootstrap.settings.language = 'en_US'; // For example, enter 'en' or 'en-US'
+        
         embeddedservice_bootstrap.init(
-          'YOUR_ORG_ID',
-          'YOUR_MESSAGING_DEPLOYMENT_NAME',
-          'YOUR_SALESFORCE_ENDPOINT',
+          '00Dg8000006eGtp',
+          'Service_Agent_Lumina',
+          'https://os1779160828320.my.site.com/ESWServiceAgentLumina1780899485218',
           {
-            scrt2URL: 'YOUR_SCRT2_URL'
+            scrt2URL: 'https://os1779160828320.my.salesforce-scrt.com'
           }
         );
       } catch (err) {
@@ -315,8 +303,8 @@
       }
     };
   </script>
-  <script type='text/javascript' src='https://YOUR_SALESFORCE_DOMAIN/embeddedservice/bootstrap/js/bootstrap.min.js' onload='initEmbeddedMessaging()'></script>
-  -->
+  <script type='text/javascript' src='https://os1779160828320.my.site.com/ESWServiceAgentLumina1780899485218/assets/js/bootstrap.min.js' onload='initEmbeddedMessaging()'></script>
+
 
 </body>
 </html>
