@@ -2,102 +2,102 @@
 const DEFAULT_PRODUCTS = [
   {
     id: "prod-1",
-    name: "Lumina Solitaire Diamond Ring",
+    name: "Gold Solitaire Diamond Ring",
     price: 4500,
     category: "Rings",
-    description: "A brilliant solitaire diamond set in an elegant 18k white gold band. A timeless statement of love.",
+    description: "A brilliant round solitaire diamond set in an elegant 18k yellow gold band. A timeless symbol of love.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug.png",
-    keywords: "ring, solitaire, diamond, engagement",
+    keywords: "ring, solitaire, diamond, engagement, gold ring",
     highlighted: true
   },
   {
     id: "prod-2",
-    name: "Aura Pearl Drop Earrings",
-    price: 850,
-    category: "Earrings",
-    description: "Lustrous South Sea pearls hanging gracefully from delicate 18k rose gold hooks.",
+    name: "Platinum Diamond Halo Ring",
+    price: 5800,
+    category: "Rings",
+    description: "A stunning round-cut diamond framed by a delicate halo of sparkling micro-pavé diamonds on a polished platinum band.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (1).png",
-    keywords: "earrings, pearl, pearls, drop",
+    keywords: "halo, halo ring, platinum ring, diamond ring",
     highlighted: true
   },
   {
     id: "prod-3",
-    name: "Eternity Diamond Tennis Bracelet",
-    price: 3200,
-    category: "Bracelets",
-    description: "A continuous line of individually set brilliant-cut diamonds in sleek platinum.",
+    name: "Gold Three-Stone Ring",
+    price: 6400,
+    category: "Rings",
+    description: "An exquisite round-cut diamond flanked by two matching side diamonds on an 18k yellow gold band, representing past, present, and future.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (2).png",
-    keywords: "bracelet, tennis, diamond bracelet, platinum",
+    keywords: "three-stone, side stones, gold band, three stone ring",
     highlighted: false
   },
   {
     id: "prod-4",
-    name: "Celestial Gold Pendant Necklace",
-    price: 1250,
-    category: "Necklaces",
-    description: "A delicate 18k yellow gold chain featuring a sparkling celestial diamond pendant.",
+    name: "Platinum Pavé Diamond Band",
+    price: 3200,
+    category: "Rings",
+    description: "A half-eternity wedding band encrusted with three rows of brilliant pavé-set diamonds in polished platinum.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (3).png",
-    keywords: "necklace, gold, pendant, celestial",
+    keywords: "pavé, wedding band, diamond band, platinum band",
     highlighted: true
   },
   {
     id: "prod-5",
-    name: "Opulent Sapphire Halo Ring",
-    price: 5200,
+    name: "Gold Eternity Diamond Ring",
+    price: 4200,
     category: "Rings",
-    description: "A deep blue oval cut sapphire surrounded by a halo of brilliant micro-diamonds.",
+    description: "A solid 18k yellow gold eternity band set with a continuous circle of brilliant-cut diamonds, symbolizing eternal devotion.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (4).png",
-    keywords: "sapphire, sapphire ring, halo, blue",
+    keywords: "eternity, eternity band, gold ring, full eternity",
     highlighted: false
   },
   {
     id: "prod-6",
-    name: "Cascade Chandelier Earrings",
-    price: 2800,
-    category: "Earrings",
-    description: "Cascading tiers of round and marquise diamonds set in fine platinum.",
+    name: "Marquise Cut Solitaire Ring",
+    price: 5500,
+    category: "Rings",
+    description: "A striking marquise-cut diamond set in a classic four-prong platinum band to elongate the finger and capture light.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (5).png",
-    keywords: "chandelier, earrings, chandelier earrings, luxury earrings",
+    keywords: "marquise, marquise ring, solitaire, marquise cut",
     highlighted: false
   },
   {
     id: "prod-7",
-    name: "Minimalist Gold Bangle",
-    price: 950,
-    category: "Bracelets",
-    description: "A sleek, modern bangle handcrafted in solid, polished 18k yellow gold.",
+    name: "Princess Cut Solitaire Ring",
+    price: 4900,
+    category: "Rings",
+    description: "A classic princess-cut square diamond mounted on a sleek 18k yellow gold band for a modern, architectural look.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (6).png",
-    keywords: "bangle, bracelet, gold bangle, solid gold",
+    keywords: "princess, princess cut, square diamond, solitaire",
     highlighted: false
   },
   {
     id: "prod-8",
-    name: "Elysian Emerald Pendant",
-    price: 3400,
-    category: "Necklaces",
-    description: "A vibrant cushion-cut Colombian emerald pendant suspended on a platinum chain.",
+    name: "Cushion Cut Halo Ring",
+    price: 6100,
+    category: "Rings",
+    description: "A soft cushion-cut diamond bordered by a sparkling halo of diamonds, set on a thin platinum band.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (7).png",
-    keywords: "emerald, emerald necklace, green, cushion cut",
+    keywords: "cushion, cushion cut, halo ring, cushion halo",
     highlighted: false
   },
   {
     id: "prod-9",
-    name: "Classic Gold Hoop Earrings",
-    price: 650,
-    category: "Earrings",
-    description: "Classic polished yellow gold hoop earrings, a versatile everyday luxury essential.",
+    name: "Vintage Filigree Bezel Ring",
+    price: 3800,
+    category: "Rings",
+    description: "An intricate, antique-inspired gold ring featuring filigree details and an octagonal bezel-set diamond.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (8).png",
-    keywords: "hoops, gold hoops, hoop earrings, hoops",
+    keywords: "vintage, filigree, bezel, octagonal, bezel ring",
     highlighted: false
   },
   {
     id: "prod-10",
-    name: "Amore Rose Gold Band",
-    price: 1100,
+    name: "Bezel Solitaire Platinum Ring",
+    price: 4700,
     category: "Rings",
-    description: "A softly curved, elegant band in polished 18k rose gold, perfect for layering.",
+    description: "A contemporary round solitaire diamond encased in a protective, modern bezel setting on a polished platinum band.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (9).png",
-    keywords: "band, rose gold, ring, gold band",
+    keywords: "bezel, solitaire, round bezel, platinum, bezel set",
     highlighted: false
   }
 ];
@@ -126,8 +126,9 @@ function initProducts() {
   if (stored) {
     try {
       const parsed = JSON.parse(stored);
-      // Force reset if the catalog doesn't contain exactly 10 products or doesn't have the uploaded Gemini images
-      if (!Array.isArray(parsed) || parsed.length !== 10 || !parsed[0].image.includes("Gemini_Generated")) {
+      // Force reset if catalog doesn't contain exactly 10 products, doesn't use Gemini images, or has non-ring categories
+      const hasNonRing = Array.isArray(parsed) && parsed.some(p => p.category !== "Rings");
+      if (!Array.isArray(parsed) || parsed.length !== 10 || !parsed[0].image.includes("Gemini_Generated") || hasNonRing) {
         needsReset = true;
       } else {
         products = parsed;
