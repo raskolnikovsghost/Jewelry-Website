@@ -116,6 +116,10 @@ document.addEventListener("DOMContentLoaded", () => {
   renderAll();
   setupEventListeners();
   setupSalesforceListeners();
+  
+  // Initialize SPA router
+  handleRouting();
+  window.addEventListener("hashchange", handleRouting);
 });
 
 // --- Catalog Database Operations (CRUD) ---
@@ -225,23 +229,33 @@ function saveCart() {
   renderCartDrawer();
 }
 
-function addToCart(productId, quantity = 1, silent = false) {
+function addToCart(productId, quantity = 1, silent = false, metal = null, size = null) {
   const product = products.find(p => p.id === productId);
   if (!product) return;
 
-  const cartItem = cart.find(item => item.productId === productId);
+  const itemMetal = metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
+  const itemSize = size || "7";
+
+  const cartItem = cart.find(item => 
+    item.productId === productId && 
+    item.metal === itemMetal && 
+    item.size === itemSize
+  );
+
   if (cartItem) {
     cartItem.quantity += quantity;
   } else {
     cart.push({
       productId: productId,
-      quantity: quantity
+      quantity: quantity,
+      metal: itemMetal,
+      size: itemSize
     });
   }
   saveCart();
   
   if (!silent) {
-    showToast(`Added ${product.name} to Cart`, "success");
+    showToast(`Added ${product.name} (${itemMetal}, Size ${itemSize}) to Cart`, "success");
     openCart();
     // Animate cart badge
     const badge = document.querySelector(".cart-count");
@@ -253,20 +267,30 @@ function addToCart(productId, quantity = 1, silent = false) {
   }
 }
 
-function changeQty(productId, change) {
-  const item = cart.find(i => i.productId === productId);
+function changeQty(productId, metal, size, change) {
+  const item = cart.find(i => 
+    i.productId === productId && 
+    i.metal === metal && 
+    i.size === size
+  );
   if (!item) return;
 
   item.quantity += change;
   if (item.quantity <= 0) {
-    removeFromCart(productId);
+    removeFromCart(productId, metal, size);
   } else {
     saveCart();
   }
 }
 
-function removeFromCart(productId) {
-  cart = cart.filter(item => item.productId !== productId);
+function removeFromCart(productId, metal = null, size = null) {
+  if (metal && size) {
+    cart = cart.filter(item => 
+      !(item.productId === productId && item.metal === metal && item.size === size)
+    );
+  } else {
+    cart = cart.filter(item => item.productId !== productId);
+  }
   saveCart();
 }
 
@@ -300,12 +324,355 @@ function removePromoCode() {
   showToast("Promo Code Removed");
 }
 
+// --- Detail Option Variables & Helpers ---
+let detailSelectedMetal = "18K Yellow Gold";
+let detailSelectedSize = "7";
+
+function getAdjustedPrice(product, metal) {
+  const isBasePlatinum = product.name.toLowerCase().includes("platinum");
+  if (metal === "Platinum" && !isBasePlatinum) {
+    return product.price + 1200;
+  }
+  if (metal === "18K Yellow Gold" && isBasePlatinum) {
+    return product.price - 1200;
+  }
+  return product.price;
+}
+
+// --- SPA Hash Router ---
+function handleRouting() {
+  const hash = window.location.hash;
+  const productDetailSection = document.getElementById("productDetailSection");
+  const heroBanner = document.getElementById("heroBanner");
+  const carouselSection = document.getElementById("carousel-section");
+  const highlightSection = document.getElementById("highlight-section");
+
+  if (!productDetailSection) return;
+
+  if (hash.startsWith("#/product/")) {
+    const productId = hash.replace("#/product/", "");
+    const product = products.find(p => p.id === productId);
+
+    if (product) {
+      // Hide home sections
+      if (heroBanner) heroBanner.style.display = "none";
+      if (carouselSection) carouselSection.style.display = "none";
+      if (highlightSection) highlightSection.style.display = "none";
+
+      // Show detail section
+      productDetailSection.style.display = "block";
+
+      // Render detail view
+      renderProductDetail(product);
+
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      window.location.hash = "#";
+    }
+  } else {
+    // Show home sections
+    if (heroBanner) heroBanner.style.display = "block";
+    if (carouselSection) carouselSection.style.display = "block";
+    if (highlightSection) highlightSection.style.display = "block";
+
+    // Hide detail section
+    productDetailSection.style.display = "none";
+    productDetailSection.innerHTML = "";
+
+    // If there was an anchor hash, scroll to it
+    if (hash && hash !== "#" && hash.startsWith("#")) {
+      const targetElement = document.querySelector(hash);
+      if (targetElement) {
+        setTimeout(() => {
+          targetElement.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+      }
+    }
+  }
+}
+
+// --- Render Product Detail Page (David Yurman Inspired) ---
+function renderProductDetail(product) {
+  const container = document.getElementById("productDetailSection");
+  if (!container) return;
+
+  if (product.name.toLowerCase().includes("platinum")) {
+    detailSelectedMetal = "Platinum";
+  } else {
+    detailSelectedMetal = "18K Yellow Gold";
+  }
+  detailSelectedSize = "7";
+
+  const renderContent = () => {
+    const adjustedPrice = getAdjustedPrice(product, detailSelectedMetal);
+    const initials = getInitials(product.name);
+    
+    // Breadcrumbs
+    const breadcrumbs = `
+      <div class="breadcrumbs container">
+        <a href="#">Home</a> &gt; <a href="#carousel-section">Fine Jewelry</a> &gt; <a href="#carousel-section">Rings</a> &gt; <span>${product.name}</span>
+      </div>
+    `;
+
+    // Premium Split Page Layout
+    container.innerHTML = `
+      ${breadcrumbs}
+      <div class="container product-detail-grid">
+        <!-- Left Column: Gallery -->
+        <div class="detail-gallery">
+          <div class="detail-main-image-wrapper">
+            <img src="${product.image}" alt="${product.name}" id="detailMainImg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="card-img-fallback" style="display:none; font-size: 2rem;">
+              <div class="fallback-icon">✦</div>
+              <div class="fallback-initials">${initials}</div>
+              <div style="font-size: 1rem; text-transform: uppercase; opacity: 0.7;">Lumina Fine</div>
+            </div>
+          </div>
+          <div class="detail-thumbnails">
+            <button class="thumb-btn active" data-zoom="1" aria-label="View main ring">
+              <img src="${product.image}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" alt="Main View">
+              <span style="display:none; font-size:12px; font-weight:bold;">✦</span>
+            </button>
+            <button class="thumb-btn" data-zoom="1.4" aria-label="View close up detail">
+              <img src="${product.image}" style="transform: scale(1.4);" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" alt="Closeup Detail">
+              <span style="display:none; font-size:12px; font-weight:bold;">🔎</span>
+            </button>
+            <button class="thumb-btn" data-zoom="Atelier" aria-label="View atelier render">
+              <img src="${product.image}" style="filter: sepia(0.6) brightness(0.9);" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" alt="Atelier Style">
+              <span style="display:none; font-size:12px; font-weight:bold;">🎨</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Column: Sticky Product Info -->
+        <div class="detail-info">
+          <span class="detail-brand-header">LUMINA ATELIER</span>
+          <h1 class="detail-product-title">${product.name}</h1>
+          <div class="detail-product-price" id="detailProductPrice">$${adjustedPrice.toLocaleString()}</div>
+          
+          <hr class="detail-divider">
+
+          <!-- Option 1: Metal Choice -->
+          <div class="detail-option-group">
+            <span class="detail-option-label">Metal: <strong id="detailMetalLabel">${detailSelectedMetal}</strong></span>
+            <div class="detail-metal-swatches">
+              <button class="metal-swatch gold ${detailSelectedMetal === '18K Yellow Gold' ? 'active' : ''}" data-metal="18K Yellow Gold" title="18K Yellow Gold" aria-label="Select 18K Yellow Gold Finish"></button>
+              <button class="metal-swatch platinum ${detailSelectedMetal === 'Platinum' ? 'active' : ''}" data-metal="Platinum" title="Platinum" aria-label="Select Platinum Finish"></button>
+            </div>
+          </div>
+
+          <!-- Option 2: Size Choice -->
+          <div class="detail-option-group">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+              <span class="detail-option-label" style="margin-bottom:0;">Size: <strong id="detailSizeLabel">${detailSelectedSize}</strong></span>
+              <button class="size-guide-link" id="btnSizeGuide">Size Guide</button>
+            </div>
+            <div class="detail-size-pills">
+              ${[5, 6, 7, 8, 9, 10, 11].map(sz => `
+                <button class="size-pill ${sz == detailSelectedSize ? 'active' : ''}" data-size="${sz}">${sz}</button>
+              `).join("")}
+            </div>
+          </div>
+
+          <!-- Add to Bag CTA -->
+          <button class="btn-primary btn-add-to-bag-pdp" id="btnAddToBagPDP">
+            ADD TO BAG
+          </button>
+          
+          <div class="detail-services-notice">
+            <p>✦ Complimentary Overnight Shipping & Signature-Required Delivery</p>
+            <p>✦ Complimentary Gift Packaging & Personal Greeting Card</p>
+          </div>
+
+          <hr class="detail-divider">
+
+          <!-- Accordions -->
+          <div class="detail-accordions">
+            <div class="detail-accordion">
+              <button class="accordion-header" aria-expanded="false" aria-controls="acc-desc">
+                <span>Description & Details</span>
+                <span class="accordion-icon">+</span>
+              </button>
+              <div id="acc-desc" class="accordion-content">
+                <div class="accordion-inner">
+                  <p>${product.description || 'A stunning custom creation from the Lumina Atelier catalog, designed to maximize sparkle and brilliance.'}</p>
+                  <ul class="accordion-bullets">
+                    <li>Conflict-free certified diamonds</li>
+                    <li>Band width: 2.2mm</li>
+                    <li>Hand-engraved Lumina hallmark</li>
+                    <li>Customizable metals and sizing</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="detail-accordion">
+              <button class="accordion-header" aria-expanded="false" aria-controls="acc-craft">
+                <span>The Atelier Craftsmanship</span>
+                <span class="accordion-icon">+</span>
+              </button>
+              <div id="acc-craft" class="accordion-content">
+                <div class="accordion-inner">
+                  <p>Each Lumina Atelier ring is carefully designed and hand-finished by master jewelers. Our diamonds are selected for their fire and clarity, set under microscopes to guarantee structural integrity and maximum light return.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="detail-accordion">
+              <button class="accordion-header" aria-expanded="false" aria-controls="acc-ship">
+                <span>Shipping & Returns</span>
+                <span class="accordion-icon">+</span>
+              </button>
+              <div id="acc-ship" class="accordion-content">
+                <div class="accordion-inner">
+                  <p>We provide free secure shipping on all orders. Returns and size exchanges are accepted within 30 days of delivery. All returns must be unworn and in original packaging.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recommendation Carousel -->
+      <section class="recommendations-section">
+        <div class="container">
+          <h3 class="recommendations-title">You May Also Like</h3>
+          <div class="recommendations-grid" id="recommendationsGrid"></div>
+        </div>
+      </section>
+    `;
+
+    // Render recommendation rings
+    const recsGrid = document.getElementById("recommendationsGrid");
+    if (recsGrid) {
+      const remainingProducts = products.filter(p => p.id !== product.id).slice(0, 4);
+      if (remainingProducts.length === 0) {
+        recsGrid.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--color-text-secondary);">Explore more premium designs in the catalog.</p>`;
+      } else {
+        recsGrid.innerHTML = remainingProducts.map(p => {
+          const initials = getInitials(p.name);
+          const imgHTML = getProductImageHTML(p.image, initials);
+          return `
+            <div class="recommendation-card">
+              <a href="#/product/${p.id}">
+                <div class="rec-img-wrapper">
+                  ${imgHTML}
+                </div>
+                <h4 class="rec-title">${p.name}</h4>
+                <p class="rec-price">$${p.price.toLocaleString()}</p>
+              </a>
+            </div>
+          `;
+        }).join("");
+      }
+    }
+
+    // Set up gallery zoom / thumbnail swap
+    const detailMainImg = document.getElementById("detailMainImg");
+    const thumbBtns = container.querySelectorAll(".thumb-btn");
+    thumbBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        thumbBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        
+        const zoom = btn.getAttribute("data-zoom");
+        if (zoom === "1") {
+          detailMainImg.style.transform = "scale(1)";
+          detailMainImg.style.filter = "none";
+        } else if (zoom === "1.4") {
+          detailMainImg.style.transform = "scale(1.4)";
+          detailMainImg.style.filter = "none";
+        } else if (zoom === "Atelier") {
+          detailMainImg.style.transform = "scale(1)";
+          detailMainImg.style.filter = "sepia(0.6) brightness(0.9)";
+        }
+      });
+    });
+
+    // Set up Swatches selection
+    const swatches = container.querySelectorAll(".metal-swatch");
+    swatches.forEach(swatch => {
+      swatch.addEventListener("click", () => {
+        swatches.forEach(s => s.classList.remove("active"));
+        swatch.classList.add("active");
+        
+        detailSelectedMetal = swatch.getAttribute("data-metal");
+        document.getElementById("detailMetalLabel").textContent = detailSelectedMetal;
+        
+        // Update Price UI dynamically
+        const newPrice = getAdjustedPrice(product, detailSelectedMetal);
+        document.getElementById("detailProductPrice").textContent = `$${newPrice.toLocaleString()}`;
+      });
+    });
+
+    // Set up Size selection
+    const sizePills = container.querySelectorAll(".size-pill");
+    sizePills.forEach(pill => {
+      pill.addEventListener("click", () => {
+        sizePills.forEach(p => p.classList.remove("active"));
+        pill.classList.add("active");
+        
+        detailSelectedSize = pill.getAttribute("data-size");
+        document.getElementById("detailSizeLabel").textContent = detailSelectedSize;
+      });
+    });
+
+    // Size Guide link
+    const btnSizeGuide = document.getElementById("btnSizeGuide");
+    if (btnSizeGuide) {
+      btnSizeGuide.addEventListener("click", () => {
+        alert("Ring Size Guide:\n\nTo find your perfect ring size, wrap a strip of paper around your finger and measure the length in millimeters.\n\nSize 5: 49.3mm\nSize 6: 51.9mm\nSize 7: 54.4mm\nSize 8: 57.0mm\nSize 9: 59.5mm\nSize 10: 62.1mm\nSize 11: 64.6mm");
+      });
+    }
+
+    // Add to Bag CTA
+    const btnAddToBag = document.getElementById("btnAddToBagPDP");
+    if (btnAddToBag) {
+      btnAddToBag.addEventListener("click", () => {
+        addToCart(product.id, 1, false, detailSelectedMetal, detailSelectedSize);
+      });
+    }
+
+    // Collapsible Accordions
+    const accordions = container.querySelectorAll(".detail-accordion");
+    accordions.forEach(accordion => {
+      const header = accordion.querySelector(".accordion-header");
+      const content = accordion.querySelector(".accordion-content");
+      const icon = accordion.querySelector(".accordion-icon");
+      
+      header.addEventListener("click", () => {
+        const isOpen = header.getAttribute("aria-expanded") === "true";
+        
+        // Toggle active class and aria
+        header.setAttribute("aria-expanded", !isOpen);
+        
+        if (!isOpen) {
+          content.style.maxHeight = content.scrollHeight + "px";
+          icon.textContent = "−";
+        } else {
+          content.style.maxHeight = "0px";
+          icon.textContent = "+";
+        }
+      });
+    });
+  };
+
+  renderContent();
+}
+
 // --- UI Render Engines ---
 function renderAll() {
   renderCarousel();
   renderHighlights();
   renderAdminList();
   renderCartDrawer();
+  
+  // Rerender active detail view if open
+  const hash = window.location.hash;
+  if (hash.startsWith("#/product/")) {
+    handleRouting();
+  }
 }
 
 function getProductImageHTML(imagePath, nameInitials) {
@@ -352,13 +719,15 @@ function renderCarousel() {
     
     return `
       <div class="product-card" id="card-${product.id}" data-id="${product.id}">
-        <div class="card-img-wrapper">
-          ${product.highlighted ? '<span class="card-badge">Highlight</span>' : ''}
-          ${imgHTML}
-        </div>
+        <a href="#/product/${product.id}" class="card-link-wrapper">
+          <div class="card-img-wrapper">
+            ${product.highlighted ? '<span class="card-badge">Highlight</span>' : ''}
+            ${imgHTML}
+          </div>
+        </a>
         <div class="card-content">
           <div class="card-category">${product.category}</div>
-          <h3 class="card-title">${product.name}</h3>
+          <h3 class="card-title"><a href="#/product/${product.id}">${product.name}</a></h3>
           <p class="card-desc">${product.description}</p>
           <div class="card-footer">
             <span class="card-price">$${product.price.toLocaleString()}</span>
@@ -389,12 +758,14 @@ function renderHighlights() {
     
     return `
       <div class="highlight-item" id="highlight-${product.id}">
-        <div class="highlight-img-wrapper">
-          ${imgHTML}
-        </div>
+        <a href="#/product/${product.id}" class="highlight-link-wrapper">
+          <div class="highlight-img-wrapper">
+            ${imgHTML}
+          </div>
+        </a>
         <div class="highlight-info">
           <div class="card-category">${product.category}</div>
-          <h3 class="highlight-title">${product.name}</h3>
+          <h3 class="highlight-title"><a href="#/product/${product.id}">${product.name}</a></h3>
           <p class="highlight-desc">${product.description}</p>
           <div class="card-footer">
             <span class="card-price" style="font-size:1.2rem;">$${product.price.toLocaleString()}</span>
@@ -429,7 +800,10 @@ function renderCartDrawer() {
     const product = products.find(p => p.id === item.productId);
     if (!product) return "";
 
-    subtotal += product.price * item.quantity;
+    const itemMetal = item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
+    const itemSize = item.size || "7";
+    const adjustedPrice = getAdjustedPrice(product, itemMetal);
+    subtotal += adjustedPrice * item.quantity;
     const initials = getInitials(product.name);
 
     return `
@@ -442,15 +816,16 @@ function renderCartDrawer() {
         </div>
         <div class="cart-item-info">
           <div class="cart-item-title">${product.name}</div>
-          <div class="cart-item-price">$${product.price.toLocaleString()}</div>
-          <div class="cart-item-qty">
-            <button class="qty-btn" onclick="changeQty('${product.id}', -1)">-</button>
+          <div class="cart-item-meta" style="font-size:0.75rem; color:var(--color-text-secondary); margin-top:2px;">${itemMetal} | Size ${itemSize}</div>
+          <div class="cart-item-price" style="font-size:0.85rem; font-weight:500;">$${adjustedPrice.toLocaleString()}</div>
+          <div class="cart-item-qty" style="margin-top:4px;">
+            <button class="qty-btn" onclick="changeQty('${product.id}', '${itemMetal}', '${itemSize}', -1)">-</button>
             <span class="qty-value">${item.quantity}</span>
-            <button class="qty-btn" onclick="changeQty('${product.id}', 1)">+</button>
+            <button class="qty-btn" onclick="changeQty('${product.id}', '${itemMetal}', '${itemSize}', 1)">+</button>
           </div>
         </div>
         <div>
-          <button class="cart-item-remove" onclick="removeFromCart('${product.id}')">Remove</button>
+          <button class="cart-item-remove" onclick="removeFromCart('${product.id}', '${itemMetal}', '${itemSize}')">Remove</button>
         </div>
       </div>
     `;
@@ -661,23 +1036,20 @@ function handleAgentMessage(messageText, sourceName = "Simulated Agent") {
 
 // UI Highlight Trigger
 function highlightProductInUI(productId, productName) {
-  // Find product card in the carousel
-  const card = document.getElementById(`card-${productId}`);
-  if (card) {
-    // 1. Scroll item into view smoothly in the carousel
-    card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-    
-    // 2. Add visual golden highlight class
-    card.classList.add("agent-highlighted");
-    
-    // 3. Create toast notification
-    showToast(`Agent suggested: ${productName}`, "success");
-    
-    // 4. Remove highlight after 5 seconds
-    setTimeout(() => {
-      card.classList.remove("agent-highlighted");
-    }, 5000);
-  }
+  // Set window hash to navigate to product detail page!
+  window.location.hash = `#/product/${productId}`;
+  
+  // Wait for rendering to complete, then apply highlight effect
+  setTimeout(() => {
+    const detailContainer = document.querySelector(".product-detail-grid");
+    if (detailContainer) {
+      detailContainer.classList.add("agent-highlighted");
+      showToast(`Agent suggested: ${productName}`, "success");
+      setTimeout(() => {
+        detailContainer.classList.remove("agent-highlighted");
+      }, 5000);
+    }
+  }, 300);
 }
 
 // --- Event Listeners and Bindings ---
