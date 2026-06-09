@@ -1067,6 +1067,35 @@ function setupEventListeners() {
     });
   }
 
+  // Mobile Menu toggle
+  const mobileMenuBtn = document.getElementById("btnMobileMenu");
+  const mobileNavMenu = document.getElementById("mobileNavMenu");
+
+  if (mobileMenuBtn && mobileNavMenu) {
+    mobileMenuBtn.addEventListener("click", () => {
+      mobileNavMenu.classList.toggle("active");
+      mobileMenuBtn.classList.toggle("active");
+    });
+  }
+
+  // Close mobile menu when links are clicked
+  const mobileLinks = document.querySelectorAll(".mobile-nav-links a");
+  mobileLinks.forEach(link => {
+    link.addEventListener("click", () => {
+      if (mobileNavMenu) mobileNavMenu.classList.remove("active");
+      if (mobileMenuBtn) mobileMenuBtn.classList.remove("active");
+    });
+  });
+
+  // Mobile menu Admin Panel trigger
+  const mobAdminOpen = document.getElementById("mobNavAdmin");
+  if (mobAdminOpen) {
+    mobAdminOpen.addEventListener("click", (e) => {
+      e.preventDefault();
+      openAdminModal();
+    });
+  }
+
   // Admin Panel modal toggles
   const adminOpen = document.getElementById("btnAdminOpen");
   const adminClose = document.getElementById("adminClose");

@@ -33,13 +33,17 @@
   padding: 0;
 }
 
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
 body {
   background-color: var(--color-bg-base);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
 }
 
 /* Typography */
@@ -200,6 +204,89 @@ button, input, select, textarea {
 .btn-admin:hover {
   background-color: var(--color-gold);
   color: #FFF;
+}
+
+/* Mobile Menu button (hidden on desktop) */
+.mobile-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-primary);
+  padding: 0.5rem;
+  transition: var(--transition-smooth);
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-menu-btn:hover {
+  color: var(--color-gold);
+}
+
+.hamburger-icon {
+  transition: transform 0.3s ease;
+}
+
+.hamburger-icon line {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  transform-origin: center;
+}
+
+/* Hamburger transition to X when menu is active */
+.mobile-menu-btn.active .line-mid {
+  opacity: 0;
+}
+
+.mobile-menu-btn.active .line-top {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.mobile-menu-btn.active .line-bot {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+/* Mobile Nav Dropdown Menu (hidden on desktop) */
+.mobile-nav-menu {
+  display: block; /* always block, toggle via max-height */
+  position: absolute;
+  top: 80px; /* sits right below navbar height */
+  left: 0;
+  width: 100%;
+  background-color: rgba(253, 251, 247, 0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: 0 10px 30px rgba(31, 28, 27, 0.05);
+  z-index: 999;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.mobile-nav-menu.active {
+  max-height: 200px; /* enough to fit mobile links */
+}
+
+.mobile-nav-links {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  padding: 1.5rem 2rem;
+  gap: 1.2rem;
+}
+
+.mobile-nav-links a {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  display: block;
+  transition: var(--transition-smooth);
+}
+
+.mobile-nav-links a:hover {
+  color: var(--color-gold);
+  padding-left: 5px;
 }
 
 /* --- HERO SECTION --- */
@@ -1554,6 +1641,7 @@ textarea.form-control {
 }
 
 .rec-img-wrapper {
+  position: relative;
   aspect-ratio: 1;
   overflow: hidden;
   margin-bottom: 1rem;
@@ -1623,8 +1711,49 @@ textarea.form-control {
   }
 }
 
-/* Responsive Grid overrides */
+/* --- COMPREHENSIVE RESPONSIVE DESIGN OVERRIDES --- */
+
+/* Prevent Salesforce Agent widget from causing horizontal page scrolling */
+.embeddedServiceHelpButton, 
+.embeddedServiceSidebarMinimized, 
+.embeddedServiceSidebarMaximized,
+[class*="embeddedservice"],
+iframe[src*="salesforce"] {
+  max-width: 100vw !important;
+}
+
+/* Tablet & Mobile Viewports */
 @media (max-width: 992px) {
+  /* Header & Navigation */
+  .navbar {
+    height: 70px;
+  }
+  
+  .nav-logo {
+    font-size: 1.4rem;
+  }
+  
+  .nav-links {
+    display: none; /* Hide desktop links */
+  }
+  
+  .mobile-menu-btn {
+    display: flex; /* Show hamburger */
+  }
+  
+  .mobile-nav-menu {
+    top: 70px; /* match navbar height */
+  }
+  
+  .nav-actions {
+    gap: 0.8rem;
+  }
+  
+  .btn-admin {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+  }
+
   .product-detail-grid {
     grid-template-columns: 1fr;
     gap: 3rem;
@@ -1640,12 +1769,154 @@ textarea.form-control {
   }
 }
 
-@media (max-width: 576px) {
-  .recommendations-grid {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
+/* Small Tablets / Large Mobile Viewports */
+@media (max-width: 768px) {
+  /* Hide desktop admin button on mobile since it is inside the hamburger dropdown */
+  #btnAdminOpen {
+    display: none;
   }
+
+  /* Make Product Detail CTA sticky at the bottom of mobile screen */
+  .btn-add-to-bag-pdp {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    z-index: 100;
+    border-radius: 0;
+    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.12);
+    padding: 1.2rem;
+  }
+
+  .detail-info {
+    padding-bottom: 80px; /* Make space for sticky CTA */
+  }
+
+  /* Push Salesforce chat bubble above the sticky button on mobile */
+  .embeddedServiceHelpButton, 
+  .embeddedServiceSidebarMinimized, 
+  [class*="embeddedservice"],
+  iframe[src*="salesforce"] {
+    bottom: 80px !important;
+  }
+
+  /* Featured Highlights */
+  .highlight-item {
+    flex-direction: column;
+    min-height: auto;
+  }
+  
+  .highlight-img-wrapper {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+  }
+  
+  .highlight-info {
+    width: 100%;
+    padding: 1.5rem;
+  }
+  
+  /* Admin Modal mobile sheet look */
+  .admin-modal-overlay {
+    padding: 0;
+  }
+  
+  .admin-modal {
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+  
+  .admin-body {
+    height: calc(100vh - 70px);
+  }
+  
+  .admin-form-col, .admin-list-col {
+    padding: 1.5rem;
+  }
+}
+
+/* Small Mobile Viewports */
+@media (max-width: 576px) {
+  /* Recommendations: 2 columns on mobile */
+  .recommendations-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  
+  .recommendation-card a {
+    padding: 1rem 0.5rem;
+  }
+  
+  .rec-title {
+    font-size: 0.85rem;
+  }
+  
   .detail-product-title {
     font-size: 1.8rem;
+  }
+  
+  .hide-mobile {
+    display: none; /* Hide specified text on mobile */
+  }
+  
+  /* Hero section adjustments */
+  .hero {
+    padding: 3rem 0;
+  }
+  
+  .hero-title {
+    font-size: 1.8rem;
+    line-height: 1.3;
+  }
+  
+  .hero-desc {
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  /* Carousel: Snap scrolling on mobile swipe */
+  .carousel-container {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .product-card {
+    flex: 0 0 270px; /* Let adjacent card pop in */
+    scroll-snap-align: start;
+  }
+}
+
+/* Very Small Mobile Viewports */
+@media (max-width: 480px) {
+  /* Page Padding */
+  .container {
+    padding: 0 1rem;
+  }
+  
+  /* Cart Drawer mobile spacing */
+  .cart-drawer {
+    max-width: 100%;
+  }
+  
+  .cart-header {
+    padding: 1rem 1.2rem;
+  }
+  
+  .cart-items {
+    padding: 1.2rem;
+    gap: 1rem;
+  }
+  
+  .cart-footer {
+    padding: 1.2rem;
+  }
+  
+  /* Breadcrumbs */
+  .breadcrumbs {
+    padding: 1rem;
   }
 }
