@@ -112,12 +112,14 @@ let editingProductId = null;
 // --- Loyalty Program State ---
 let userLoyaltyPoints = 850;
 let appliedLoyaltyPoints = 0;
+let purchaseHistory = [];
 
 // --- Initialize App ---
 document.addEventListener("DOMContentLoaded", () => {
   initProducts();
   initCart();
   initLoyalty();
+  initPurchaseHistory();
   renderAll();
   setupEventListeners();
   setupSalesforceListeners();
@@ -244,6 +246,34 @@ function initLoyalty() {
     localStorage.setItem("lumina_loyalty_points", userLoyaltyPoints);
   }
   appliedLoyaltyPoints = 0;
+}
+
+function initPurchaseHistory() {
+  const storedHistory = localStorage.getItem("lumina_purchase_history");
+  if (storedHistory) {
+    try {
+      purchaseHistory = JSON.parse(storedHistory);
+    } catch (e) {
+      purchaseHistory = [];
+    }
+  } else {
+    // Default history: previous purchase ($850 earrings) as requested
+    purchaseHistory = [
+      {
+        orderId: "LMA-982741",
+        date: "2026-06-10",
+        items: [
+          { name: "Lumina Gold Diamond Stud Earrings", price: 850, quantity: 1 }
+        ],
+        subtotal: 850,
+        discount: 0,
+        loyaltyDiscount: 0,
+        total: 850,
+        pointsEarned: 850
+      }
+    ];
+    localStorage.setItem("lumina_purchase_history", JSON.stringify(purchaseHistory));
+  }
 }
 
 function saveLoyaltyPoints(points) {
@@ -387,13 +417,32 @@ function getAdjustedPrice(product, metal) {
 function handleRouting() {
   const hash = window.location.hash;
   const productDetailSection = document.getElementById("productDetailSection");
+  const loyaltyProfileSection = document.getElementById("loyaltyProfileSection");
   const heroBanner = document.getElementById("heroBanner");
   const carouselSection = document.getElementById("carousel-section");
   const highlightSection = document.getElementById("highlight-section");
 
   if (!productDetailSection) return;
 
-  if (hash.startsWith("#/product/")) {
+  if (hash === "#/loyalty") {
+    // Hide home sections
+    if (heroBanner) heroBanner.style.display = "none";
+    if (carouselSection) carouselSection.style.display = "none";
+    if (highlightSection) highlightSection.style.display = "none";
+
+    // Hide product detail
+    productDetailSection.style.display = "none";
+    productDetailSection.innerHTML = "";
+
+    // Show loyalty section
+    if (loyaltyProfileSection) {
+      loyaltyProfileSection.style.display = "block";
+      renderLoyaltyProfile();
+    }
+
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (hash.startsWith("#/product/")) {
     const productId = hash.replace("#/product/", "");
     const product = products.find(p => p.id === productId);
 
@@ -402,6 +451,12 @@ function handleRouting() {
       if (heroBanner) heroBanner.style.display = "none";
       if (carouselSection) carouselSection.style.display = "none";
       if (highlightSection) highlightSection.style.display = "none";
+
+      // Hide loyalty profile
+      if (loyaltyProfileSection) {
+        loyaltyProfileSection.style.display = "none";
+        loyaltyProfileSection.innerHTML = "";
+      }
 
       // Show detail section
       productDetailSection.style.display = "block";
@@ -423,6 +478,12 @@ function handleRouting() {
     // Hide detail section
     productDetailSection.style.display = "none";
     productDetailSection.innerHTML = "";
+
+    // Hide loyalty profile
+    if (loyaltyProfileSection) {
+      loyaltyProfileSection.style.display = "none";
+      loyaltyProfileSection.innerHTML = "";
+    }
 
     // If there was an anchor hash, scroll to it
     if (hash && hash !== "#" && hash.startsWith("#")) {
@@ -747,6 +808,78 @@ function getInitials(name) {
     .slice(0, 2)
     .join("")
     .toUpperCase();
+}
+
+function renderLoyaltyProfile() {
+  const container = document.getElementById("loyaltyProfileSection");
+  if (!container) return;
+
+  // Load purchase history
+  initPurchaseHistory();
+
+  const historyHTML = purchaseHistory.map(order => {
+    const itemsList = order.items.map(item => `${item.name} (x${item.quantity}) - $${item.price.toLocaleString()}`).join("<br>");
+    return `
+      <div class="history-card">
+        <div class="history-header">
+          <span class="order-no">Order ID: <strong>${order.orderId}</strong></span>
+          <span class="order-date">${new Date(order.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        </div>
+        <div class="history-body">
+          <div class="history-items">${itemsList}</div>
+          <div class="history-totals">
+            <div class="history-row"><span>Subtotal:</span><span>$${order.subtotal.toLocaleString()}</span></div>
+            ${order.discount > 0 ? `<div class="history-row"><span>Discount:</span><span>-$${order.discount.toLocaleString()}</span></div>` : ''}
+            ${order.loyaltyDiscount > 0 ? `<div class="history-row"><span>Points Spent:</span><span>-$${order.loyaltyDiscount.toLocaleString()}</span></div>` : ''}
+            <div class="history-row total"><span>Total Paid:</span><strong>$${order.total.toLocaleString()}</strong></div>
+          </div>
+        </div>
+        <div class="history-footer">
+          <div class="history-points">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="loyalty-star-icon" style="color: var(--color-success); fill: var(--color-success);">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            <span>Points Earned: <strong>+${order.pointsEarned.toLocaleString()} points</strong></span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  container.innerHTML = `
+    <div class="breadcrumbs container">
+      <a href="#">Home</a> &gt; <span>Loyalty Profile</span>
+    </div>
+    <div class="container loyalty-profile-container">
+      <div class="loyalty-profile-header-card">
+        <div class="profile-header-top">
+          <div class="profile-avatar">AT</div>
+          <div class="profile-meta">
+            <span class="profile-tier">Lumina Gold Member</span>
+            <h1 class="profile-user-name">Andrew Thomas</h1>
+            <p class="profile-user-email">andrew.thomas@lumina-atelier.com</p>
+          </div>
+        </div>
+        <div class="profile-points-card">
+          <div class="points-val-box">
+            <span class="points-title">Current Points</span>
+            <span class="points-count">${userLoyaltyPoints.toLocaleString()}</span>
+          </div>
+          <div class="points-value-box">
+            <span class="points-title">Value equivalent</span>
+            <span class="points-cash-value">$${(userLoyaltyPoints * 0.10).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="loyalty-profile-body">
+        <h2 class="profile-section-title">Purchase History</h2>
+        <div class="purchase-history-list">
+          ${historyHTML || '<p class="no-purchases">No purchases yet. Start shopping to earn loyalty points!</p>'}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderCarousel() {
@@ -1182,6 +1315,15 @@ function setupEventListeners() {
     });
   });
 
+  // Mobile loyalty link should close mobile menu drawer
+  const mobileLoyaltyLink = document.querySelector(".mobile-loyalty-widget-link");
+  if (mobileLoyaltyLink) {
+    mobileLoyaltyLink.addEventListener("click", () => {
+      if (mobileNavMenu) mobileNavMenu.classList.remove("active");
+      if (mobileMenuBtn) mobileMenuBtn.classList.remove("active");
+    });
+  }
+
   // Mobile menu Admin Panel trigger
   const mobAdminOpen = document.getElementById("mobNavAdmin");
   if (mobAdminOpen) {
@@ -1446,6 +1588,32 @@ function processCheckout() {
   if (confirmTotal) confirmTotal.textContent = `$${total.toLocaleString()}`;
   if (confirmPointsGained) confirmPointsGained.textContent = `+${pointsEarned.toLocaleString()} points`;
   if (confirmNewBalance) confirmNewBalance.textContent = `${newLoyaltyBalance.toLocaleString()} points`;
+
+  // Log order to purchase history
+  const orderItems = cart.map(item => {
+    const product = products.find(p => p.id === item.productId);
+    const itemMetal = item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
+    return {
+      name: `${product.name} (${itemMetal}, Size ${item.size})`,
+      price: getAdjustedPrice(product, itemMetal),
+      quantity: item.quantity
+    };
+  });
+
+  const historyEntry = {
+    orderId: orderNum,
+    date: new Date().toISOString().split('T')[0],
+    items: orderItems,
+    subtotal: subtotal,
+    discount: promoDiscount,
+    loyaltyDiscount: finalLoyaltyDiscount,
+    total: total,
+    pointsEarned: pointsEarned
+  };
+
+  initPurchaseHistory();
+  purchaseHistory.unshift(historyEntry);
+  localStorage.setItem("lumina_purchase_history", JSON.stringify(purchaseHistory));
 
   // Apply state updates
   saveLoyaltyPoints(newLoyaltyBalance);

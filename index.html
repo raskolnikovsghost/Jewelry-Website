@@ -32,13 +32,15 @@
 
       <div class="nav-actions">
         <!-- Loyalty Scheme Widget -->
-        <div class="user-loyalty-widget" id="headerLoyaltyWidget" title="Loyalty Member: Andrew Thomas">
-          <div class="user-avatar">AT</div>
-          <div class="user-loyalty-info hide-mobile">
-            <span class="user-name">Andrew Thomas</span>
-            <span class="user-points"><span id="headerPointsCount">850</span> points</span>
+        <a href="#/loyalty" class="user-loyalty-widget-link" style="text-decoration: none;">
+          <div class="user-loyalty-widget" id="headerLoyaltyWidget" title="View Loyalty Profile">
+            <div class="user-avatar">AT</div>
+            <div class="user-loyalty-info hide-mobile">
+              <span class="user-name">Andrew Thomas</span>
+              <span class="user-points"><span id="headerPointsCount">850</span> points</span>
+            </div>
           </div>
-        </div>
+        </a>
 
         <button id="btnAdminOpen" class="btn-admin" aria-label="Open Catalog Admin Panel">
           Admin <span class="hide-mobile">Panel</span>
@@ -65,13 +67,15 @@
     <div id="mobileNavMenu" class="mobile-nav-menu">
       <nav aria-label="Mobile Navigation">
         <!-- Mobile Loyalty Widget -->
-        <div class="mobile-loyalty-widget">
-          <div class="user-avatar">AT</div>
-          <div class="mobile-loyalty-info">
-            <span class="user-name">Andrew Thomas</span>
-            <span class="user-points"><span id="mobilePointsCount">850</span> points</span>
+        <a href="#/loyalty" class="mobile-loyalty-widget-link" style="text-decoration: none; width: 100%;">
+          <div class="mobile-loyalty-widget" title="View Loyalty Profile">
+            <div class="user-avatar">AT</div>
+            <div class="mobile-loyalty-info">
+              <span class="user-name">Andrew Thomas</span>
+              <span class="user-points"><span id="mobilePointsCount">850</span> points</span>
+            </div>
           </div>
-        </div>
+        </a>
         <ul class="mobile-nav-links">
           <li><a href="#carousel-section" id="mobNavCatalog">Catalog</a></li>
           <li><a href="#highlight-section" id="mobNavHighlights">Highlights</a></li>
@@ -127,6 +131,11 @@
 
   <!-- --- PRODUCT DETAIL VIEW SECTION (SPA) --- -->
   <section id="productDetailSection" class="product-detail-section" style="display: none;">
+    <!-- Loaded dynamically via JavaScript -->
+  </section>
+
+  <!-- --- LOYALTY PROFILE SECTION (SPA) --- -->
+  <section id="loyaltyProfileSection" class="loyalty-profile-section" style="display: none;">
     <!-- Loaded dynamically via JavaScript -->
   </section>
 

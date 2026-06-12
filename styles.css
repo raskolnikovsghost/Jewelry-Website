@@ -2237,8 +2237,298 @@ iframe[src*="salesforce"] {
 }
 
 /* Spin animation for diamond star */
-@keyframes spin-pulse {
-  0% { transform: scale(1) rotate(0deg); }
-  50% { transform: scale(1.1) rotate(180deg); }
-  100% { transform: scale(1) rotate(360deg); }
+}
+
+/* --- LOYALTY PROFILE PAGE STYLES --- */
+.loyalty-profile-section {
+  padding: 3rem 0 5rem;
+  background-color: var(--color-bg-base);
+  animation: loyalty-fade-in 0.4s ease-out;
+}
+
+@keyframes loyalty-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.loyalty-profile-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2.5rem;
+  margin-top: 2rem;
+}
+
+.loyalty-profile-header-card {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  padding: 2.5rem;
+  box-shadow: var(--shadow-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.profile-header-top {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.profile-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--color-gold) 0%, var(--color-gold-hover) 100%);
+  color: #FFF;
+  font-family: var(--font-serif);
+  font-size: 2.5rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(197, 168, 128, 0.3);
+}
+
+.profile-meta {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.profile-tier {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--color-gold-hover);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  display: inline-block;
+}
+
+.profile-user-name {
+  font-size: 2.2rem;
+  line-height: 1.1;
+  color: var(--color-text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.profile-user-email {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+.profile-points-card {
+  display: flex;
+  gap: 2rem;
+  background-color: var(--color-gold-light);
+  border: 1px solid rgba(197, 168, 128, 0.2);
+  border-radius: var(--border-radius-sm);
+  padding: 1.5rem 2.5rem;
+  text-align: center;
+  flex-grow: 0;
+  min-width: 320px;
+}
+
+.points-val-box, .points-value-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.points-val-box {
+  border-right: 1px solid rgba(197, 168, 128, 0.2);
+  padding-right: 1.5rem;
+}
+
+.points-value-box {
+  padding-left: 1.5rem;
+}
+
+.points-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.points-count {
+  font-family: var(--font-serif);
+  font-size: 2.2rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.points-cash-value {
+  font-family: var(--font-sans);
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--color-gold-hover);
+  line-height: 1;
+}
+
+.loyalty-profile-body {
+  text-align: left;
+}
+
+.profile-section-title {
+  font-size: 1.6rem;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.profile-section-title::after {
+  content: '';
+  display: block;
+  width: 50px;
+  height: 2px;
+  background-color: var(--color-gold);
+  margin-top: 0.5rem;
+}
+
+.purchase-history-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+.no-purchases {
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  padding: 3rem;
+  background-color: var(--color-bg-card);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--border-radius-sm);
+}
+
+.history-card {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: var(--transition-smooth);
+}
+
+.history-card:hover {
+  border-color: var(--color-gold);
+  box-shadow: var(--shadow-subtle);
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.order-no {
+  color: var(--color-text-secondary);
+}
+
+.order-no strong {
+  color: var(--color-text-primary);
+}
+
+.order-date {
+  color: var(--color-text-secondary);
+}
+
+.history-body {
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.history-items {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  flex-grow: 1;
+}
+
+.history-totals {
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background-color: var(--color-bg-base);
+  padding: 1rem;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.history-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.history-row.total {
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.5rem;
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+}
+
+.history-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px dashed var(--color-border);
+  padding-top: 1rem;
+}
+
+.history-points {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-success);
+  font-size: 0.85rem;
+}
+
+.history-points strong {
+  color: var(--color-success);
+}
+
+@media (max-width: 768px) {
+  .loyalty-profile-header-card {
+    padding: 1.5rem;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .profile-header-top {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .profile-meta {
+    align-items: center;
+    text-align: center;
+  }
+  
+  .profile-user-name {
+    font-size: 1.8rem;
+  }
+  
+  .profile-points-card {
+    min-width: 100%;
+    padding: 1.25rem 1.5rem;
+  }
 }
