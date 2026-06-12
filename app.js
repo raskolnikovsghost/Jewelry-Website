@@ -109,10 +109,15 @@ let activeDiscount = 0; // percentage, e.g. 15 for 15%
 let activeDiscountCode = "";
 let editingProductId = null;
 
+// --- Loyalty Program State ---
+let userLoyaltyPoints = 850;
+let appliedLoyaltyPoints = 0;
+
 // --- Initialize App ---
 document.addEventListener("DOMContentLoaded", () => {
   initProducts();
   initCart();
+  initLoyalty();
   renderAll();
   setupEventListeners();
   setupSalesforceListeners();
@@ -227,6 +232,45 @@ function saveCart() {
   localStorage.setItem("lumina_cart", JSON.stringify(cart));
   updateCartCount();
   renderCartDrawer();
+}
+
+// --- Loyalty Operations ---
+function initLoyalty() {
+  const storedPoints = localStorage.getItem("lumina_loyalty_points");
+  if (storedPoints !== null) {
+    userLoyaltyPoints = parseInt(storedPoints, 10) || 0;
+  } else {
+    userLoyaltyPoints = 850;
+    localStorage.setItem("lumina_loyalty_points", userLoyaltyPoints);
+  }
+  appliedLoyaltyPoints = 0;
+}
+
+function saveLoyaltyPoints(points) {
+  userLoyaltyPoints = points;
+  localStorage.setItem("lumina_loyalty_points", userLoyaltyPoints);
+  updateLoyaltyUI();
+}
+
+function updateLoyaltyUI() {
+  const headerCount = document.getElementById("headerPointsCount");
+  const mobileCount = document.getElementById("mobilePointsCount");
+  const cartBalanceText = document.getElementById("loyaltyBalanceText");
+  const loyaltyInput = document.getElementById("loyaltyInput");
+
+  if (headerCount) {
+    headerCount.textContent = userLoyaltyPoints.toLocaleString();
+  }
+  if (mobileCount) {
+    mobileCount.textContent = userLoyaltyPoints.toLocaleString();
+  }
+  if (cartBalanceText) {
+    const dollarVal = (userLoyaltyPoints * 0.10).toFixed(2);
+    cartBalanceText.textContent = `${userLoyaltyPoints.toLocaleString()} pts ($${dollarVal}) available`;
+  }
+  if (loyaltyInput) {
+    loyaltyInput.setAttribute("placeholder", `Spend Points (Max ${userLoyaltyPoints})`);
+  }
 }
 
 function addToCart(productId, quantity = 1, silent = false, metal = null, size = null) {
@@ -667,6 +711,7 @@ function renderAll() {
   renderHighlights();
   renderAdminList();
   renderCartDrawer();
+  updateLoyaltyUI();
   
   // Rerender active detail view if open
   const hash = window.location.hash;
@@ -791,6 +836,16 @@ function renderCartDrawer() {
     subtotalVal.textContent = "$0";
     discountRow.style.display = "none";
     totalVal.textContent = "$0";
+    
+    // Reset loyalty display
+    const loyaltyDiscountRow = document.getElementById("cartLoyaltyDiscountRow");
+    if (loyaltyDiscountRow) loyaltyDiscountRow.style.display = "none";
+    const pointsEarnedText = document.getElementById("cartPointsEarned");
+    if (pointsEarnedText) pointsEarnedText.textContent = "0";
+    appliedLoyaltyPoints = 0;
+    const loyaltyInput = document.getElementById("loyaltyInput");
+    if (loyaltyInput) loyaltyInput.value = "";
+    
     return;
   }
 
@@ -841,10 +896,50 @@ function renderCartDrawer() {
     discountRow.style.display = "none";
   }
 
-  const total = subtotal - discount;
+  // Validate and cap applied loyalty points
+  const maxDiscountCash = subtotal - discount;
+  const maxPointsNeeded = Math.ceil(maxDiscountCash / 0.10);
+  const maxPointsUserCanSpend = Math.min(userLoyaltyPoints, maxPointsNeeded);
+  
+  if (appliedLoyaltyPoints > maxPointsUserCanSpend) {
+    appliedLoyaltyPoints = maxPointsUserCanSpend;
+  }
+  if (appliedLoyaltyPoints < 0) {
+    appliedLoyaltyPoints = 0;
+  }
+
+  const loyaltyDiscount = appliedLoyaltyPoints * 0.10;
+  const finalLoyaltyDiscount = Math.min(loyaltyDiscount, maxDiscountCash);
+
+  const loyaltyDiscountRow = document.getElementById("cartLoyaltyDiscountRow");
+  const loyaltyDiscountVal = document.getElementById("cartLoyaltyDiscount");
+  const pointsSpentText = document.getElementById("cartPointsSpentText");
+
+  if (appliedLoyaltyPoints > 0) {
+    if (loyaltyDiscountRow) loyaltyDiscountRow.style.display = "flex";
+    if (pointsSpentText) pointsSpentText.textContent = appliedLoyaltyPoints;
+    if (loyaltyDiscountVal) loyaltyDiscountVal.textContent = `-$${finalLoyaltyDiscount.toLocaleString()}`;
+  } else {
+    if (loyaltyDiscountRow) loyaltyDiscountRow.style.display = "none";
+  }
+
+  const total = subtotal - discount - finalLoyaltyDiscount;
 
   subtotalVal.textContent = `$${subtotal.toLocaleString()}`;
   totalVal.textContent = `$${total.toLocaleString()}`;
+
+  // Update Points Earned display (1 point per dollar spent of cash total)
+  const pointsEarned = Math.max(0, Math.floor(total));
+  const pointsEarnedText = document.getElementById("cartPointsEarned");
+  if (pointsEarnedText) {
+    pointsEarnedText.textContent = pointsEarned.toLocaleString();
+  }
+
+  // Update loyalty input display if user is not focused
+  const loyaltyInput = document.getElementById("loyaltyInput");
+  if (loyaltyInput && document.activeElement !== loyaltyInput) {
+    loyaltyInput.value = appliedLoyaltyPoints > 0 ? appliedLoyaltyPoints : "";
+  }
 }
 
 function renderAdminList() {
@@ -1178,6 +1273,195 @@ function setupEventListeners() {
     btnNext.addEventListener("click", () => {
       carousel.scrollBy({ left: 320, behavior: "smooth" });
     });
+  }
+
+  // Cart Loyalty Points Apply
+  const btnApplyLoyalty = document.getElementById("btnApplyLoyalty");
+  const loyaltyInput = document.getElementById("loyaltyInput");
+  if (btnApplyLoyalty && loyaltyInput) {
+    btnApplyLoyalty.addEventListener("click", () => {
+      const val = parseInt(loyaltyInput.value, 10);
+      if (isNaN(val) || val < 0) {
+        showToast("Please enter a valid amount of points", "error");
+        return;
+      }
+      
+      // Calculate current subtotal and discount to know max needed points
+      let subtotal = 0;
+      cart.forEach(item => {
+        const product = products.find(p => p.id === item.productId);
+        if (product) {
+          const itemMetal = item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
+          const adjustedPrice = getAdjustedPrice(product, itemMetal);
+          subtotal += adjustedPrice * item.quantity;
+        }
+      });
+      
+      let promoDiscount = 0;
+      if (activeDiscount > 0) {
+        promoDiscount = subtotal * (activeDiscount / 100);
+      }
+      
+      const maxDiscountCash = subtotal - promoDiscount;
+      const maxPointsNeeded = Math.ceil(maxDiscountCash / 0.10);
+      const maxPointsUserCanSpend = Math.min(userLoyaltyPoints, maxPointsNeeded);
+
+      if (val > userLoyaltyPoints) {
+        showToast(`You only have ${userLoyaltyPoints} points available`, "error");
+        appliedLoyaltyPoints = maxPointsUserCanSpend;
+      } else if (val > maxPointsNeeded) {
+        showToast(`Capped points to max needed: ${maxPointsNeeded} pts`, "info");
+        appliedLoyaltyPoints = maxPointsNeeded;
+      } else {
+        appliedLoyaltyPoints = val;
+        showToast(`Applied ${appliedLoyaltyPoints} loyalty points!`, "success");
+      }
+      
+      saveCart();
+    });
+  }
+
+  // Use Max Loyalty Points
+  const btnUseMaxLoyalty = document.getElementById("btnUseMaxLoyalty");
+  if (btnUseMaxLoyalty && loyaltyInput) {
+    btnUseMaxLoyalty.addEventListener("click", () => {
+      let subtotal = 0;
+      cart.forEach(item => {
+        const product = products.find(p => p.id === item.productId);
+        if (product) {
+          const itemMetal = item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
+          const adjustedPrice = getAdjustedPrice(product, itemMetal);
+          subtotal += adjustedPrice * item.quantity;
+        }
+      });
+      
+      let promoDiscount = 0;
+      if (activeDiscount > 0) {
+        promoDiscount = subtotal * (activeDiscount / 100);
+      }
+      
+      const maxDiscountCash = subtotal - promoDiscount;
+      const maxPointsNeeded = Math.ceil(maxDiscountCash / 0.10);
+      const maxPointsUserCanSpend = Math.min(userLoyaltyPoints, maxPointsNeeded);
+
+      if (maxPointsUserCanSpend <= 0) {
+        showToast("No points can be applied to this order", "error");
+        appliedLoyaltyPoints = 0;
+      } else {
+        appliedLoyaltyPoints = maxPointsUserCanSpend;
+        showToast(`Applied maximum possible points: ${appliedLoyaltyPoints} pts`, "success");
+      }
+      saveCart();
+    });
+  }
+
+  // Secure Checkout Button Click Handler
+  const btnCheckout = document.getElementById("btnCheckout");
+  if (btnCheckout) {
+    btnCheckout.addEventListener("click", () => {
+      if (cart.length === 0) {
+        showToast("Your cart is empty", "error");
+        return;
+      }
+      processCheckout();
+    });
+  }
+
+  // Confirmation Modal Close
+  const btnConfirmClose = document.getElementById("btnConfirmClose");
+  const confirmationOverlay = document.getElementById("confirmationOverlay");
+  if (btnConfirmClose && confirmationOverlay) {
+    btnConfirmClose.addEventListener("click", () => {
+      confirmationOverlay.classList.remove("active");
+    });
+  }
+}
+
+// --- Checkout Simulation with Loyalty Update ---
+function processCheckout() {
+  // Calculate final numbers
+  let subtotal = 0;
+  cart.forEach(item => {
+    const product = products.find(p => p.id === item.productId);
+    if (product) {
+      const itemMetal = item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
+      const adjustedPrice = getAdjustedPrice(product, itemMetal);
+      subtotal += adjustedPrice * item.quantity;
+    }
+  });
+
+  let promoDiscount = 0;
+  if (activeDiscount > 0) {
+    promoDiscount = subtotal * (activeDiscount / 100);
+  }
+
+  const maxDiscountCash = subtotal - promoDiscount;
+  const loyaltyDiscount = appliedLoyaltyPoints * 0.10;
+  const finalLoyaltyDiscount = Math.min(loyaltyDiscount, maxDiscountCash);
+
+  const total = subtotal - promoDiscount - finalLoyaltyDiscount;
+  const pointsEarned = Math.max(0, Math.floor(total));
+
+  // Update Loyalty points
+  const pointsSpent = appliedLoyaltyPoints;
+  const newLoyaltyBalance = userLoyaltyPoints - pointsSpent + pointsEarned;
+
+  // Generate random order number
+  const orderNum = "LMA-" + Math.floor(100000 + Math.random() * 900000);
+
+  // Update confirmation modal text
+  const confirmOrderNo = document.getElementById("confirmOrderNo");
+  const confirmSubtotal = document.getElementById("confirmSubtotal");
+  const confirmPromoDiscountRow = document.getElementById("confirmPromoDiscountRow");
+  const confirmPromoDiscount = document.getElementById("confirmPromoDiscount");
+  const confirmLoyaltyDiscountRow = document.getElementById("confirmLoyaltyDiscountRow");
+  const confirmLoyaltyDiscount = document.getElementById("confirmLoyaltyDiscount");
+  const confirmPointsSpent = document.getElementById("confirmPointsSpent");
+  const confirmTotal = document.getElementById("confirmTotal");
+  const confirmPointsGained = document.getElementById("confirmPointsGained");
+  const confirmNewBalance = document.getElementById("confirmNewBalance");
+
+  if (confirmOrderNo) confirmOrderNo.textContent = orderNum;
+  if (confirmSubtotal) confirmSubtotal.textContent = `$${subtotal.toLocaleString()}`;
+  
+  if (confirmPromoDiscountRow && confirmPromoDiscount) {
+    if (promoDiscount > 0) {
+      confirmPromoDiscountRow.style.display = "flex";
+      confirmPromoDiscount.textContent = `-$${promoDiscount.toLocaleString()} (${activeDiscountCode})`;
+    } else {
+      confirmPromoDiscountRow.style.display = "none";
+    }
+  }
+
+  if (confirmLoyaltyDiscountRow && confirmLoyaltyDiscount && confirmPointsSpent) {
+    if (pointsSpent > 0) {
+      confirmLoyaltyDiscountRow.style.display = "flex";
+      confirmPointsSpent.textContent = pointsSpent;
+      confirmLoyaltyDiscount.textContent = `-$${finalLoyaltyDiscount.toLocaleString()}`;
+    } else {
+      confirmLoyaltyDiscountRow.style.display = "none";
+    }
+  }
+
+  if (confirmTotal) confirmTotal.textContent = `$${total.toLocaleString()}`;
+  if (confirmPointsGained) confirmPointsGained.textContent = `+${pointsEarned.toLocaleString()} points`;
+  if (confirmNewBalance) confirmNewBalance.textContent = `${newLoyaltyBalance.toLocaleString()} points`;
+
+  // Apply state updates
+  saveLoyaltyPoints(newLoyaltyBalance);
+
+  // Clear cart and states
+  cart = [];
+  appliedLoyaltyPoints = 0;
+  saveCart(); // This will close active promo and render empty cart
+
+  // Close cart drawer
+  closeCart();
+
+  // Open confirmation modal
+  const confirmationOverlay = document.getElementById("confirmationOverlay");
+  if (confirmationOverlay) {
+    confirmationOverlay.classList.add("active");
   }
 }
 
