@@ -104,6 +104,7 @@ const DEFAULT_PRODUCTS = [
 
 // --- Application State ---
 let products = [];
+let agentforceProducts = [];
 let cart = [];
 let activeDiscount = 0; // percentage, e.g. 15 for 15%
 let activeDiscountCode = "";
@@ -117,6 +118,7 @@ let purchaseHistory = [];
 // --- Initialize App ---
 document.addEventListener("DOMContentLoaded", () => {
   initProducts();
+  initAgentforceProducts();
   initCart();
   initLoyalty();
   initPurchaseHistory();
@@ -170,6 +172,96 @@ window.resetCatalogToDefaults = function() {
 function saveProducts() {
   localStorage.setItem("lumina_products", JSON.stringify(products));
   renderAll();
+}
+
+function initAgentforceProducts() {
+  const stored = localStorage.getItem("lumina_agentforce_products");
+  if (!stored) return;
+
+  try {
+    const parsed = JSON.parse(stored);
+    agentforceProducts = Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    agentforceProducts = [];
+  }
+}
+
+function saveAgentforceProducts() {
+  localStorage.setItem("lumina_agentforce_products", JSON.stringify(agentforceProducts));
+}
+
+function findProductByCode(productCode) {
+  const normalized = String(productCode || "").trim().toLowerCase();
+  if (!normalized) return null;
+
+  return [...products, ...agentforceProducts].find(product =>
+    String(product.id || "").toLowerCase() === normalized ||
+    String(product.productCode || "").toLowerCase() === normalized
+  ) || null;
+}
+
+function isServiceProduct(product) {
+  return String(product?.category || product?.family || "").toLowerCase() === "services";
+}
+
+function formatAgentforceServiceName(productCode) {
+  return String(productCode || "engraving-service")
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function upsertAgentforceServiceProduct(productCode, details = {}) {
+  const normalizedCode = String(productCode || "").trim();
+  if (!normalizedCode) return null;
+
+  const existing = findProductByCode(normalizedCode);
+  if (existing) return existing;
+
+  const serviceProduct = {
+    id: normalizedCode,
+    productCode: normalizedCode,
+    name: details.name || "Engraving Service",
+    price: Number.isFinite(Number(details.price)) ? Number(details.price) : 0,
+    category: "Services",
+    family: "Services",
+    description: details.description || `${formatAgentforceServiceName(normalizedCode)} added by Agentforce.`,
+    image: details.image || "",
+    keywords: "engraving, personalization, services",
+    highlighted: false,
+    source: "agentforce"
+  };
+
+  agentforceProducts.push(serviceProduct);
+  saveAgentforceProducts();
+  return serviceProduct;
+}
+
+function upsertAgentforceRingProduct(productCode, details = {}) {
+  const normalizedCode = String(productCode || "").trim();
+  if (!normalizedCode) return null;
+
+  const existing = findProductByCode(normalizedCode);
+  if (existing) return existing;
+
+  const ringProduct = {
+    id: normalizedCode,
+    productCode: normalizedCode,
+    name: details.name || normalizedCode,
+    price: Number.isFinite(Number(details.price)) ? Number(details.price) : 0,
+    category: "Rings",
+    family: "Rings",
+    description: details.description || "Ring product added by Agentforce.",
+    image: details.image || "",
+    keywords: details.keywords || "ring, agentforce",
+    highlighted: false,
+    source: "agentforce"
+  };
+
+  agentforceProducts.push(ringProduct);
+  saveAgentforceProducts();
+  return ringProduct;
 }
 
 function addProduct(productData) {
@@ -228,10 +320,26 @@ function initCart() {
       cart = [];
     }
   }
+
+  const storedDiscount = localStorage.getItem("lumina_active_discount");
+  if (storedDiscount) {
+    try {
+      const parsed = JSON.parse(storedDiscount);
+      activeDiscount = Number(parsed?.percent) || 0;
+      activeDiscountCode = parsed?.code || "";
+    } catch (e) {
+      activeDiscount = 0;
+      activeDiscountCode = "";
+    }
+  }
 }
 
 function saveCart() {
   localStorage.setItem("lumina_cart", JSON.stringify(cart));
+  localStorage.setItem("lumina_active_discount", JSON.stringify({
+    percent: activeDiscount,
+    code: activeDiscountCode
+  }));
   updateCartCount();
   renderCartDrawer();
 }
@@ -303,33 +411,40 @@ function updateLoyaltyUI() {
   }
 }
 
-function addToCart(productId, quantity = 1, silent = false, metal = null, size = null) {
-  const product = products.find(p => p.id === productId);
+function addToCart(productId, quantity = 1, silent = false, metal = null, size = null, source = null) {
+  const product = findProductByCode(productId);
   if (!product) return;
 
-  const itemMetal = metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
-  const itemSize = size || "7";
+  const productKey = product.id || product.productCode || productId;
+  const itemSource = source || product.source || "storefront";
+  const itemMetal = isServiceProduct(product) ? "Service" : (metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
+  const itemSize = isServiceProduct(product) ? "N/A" : (size || "7");
 
   const cartItem = cart.find(item => 
-    item.productId === productId && 
+    item.productId === productKey && 
     item.metal === itemMetal && 
     item.size === itemSize
   );
 
   if (cartItem) {
     cartItem.quantity += quantity;
+    if (itemSource === "agentforce") {
+      cartItem.source = itemSource;
+    }
   } else {
     cart.push({
-      productId: productId,
+      productId: productKey,
       quantity: quantity,
       metal: itemMetal,
-      size: itemSize
+      size: itemSize,
+      source: itemSource
     });
   }
   saveCart();
   
   if (!silent) {
-    showToast(`Added ${product.name} (${itemMetal}, Size ${itemSize}) to Cart`, "success");
+    const optionLabel = isServiceProduct(product) ? "" : ` (${itemMetal}, Size ${itemSize})`;
+    showToast(`Added ${product.name}${optionLabel} to Cart`, "success");
     openCart();
     // Animate cart badge
     const badge = document.querySelector(".cart-count");
@@ -403,6 +518,10 @@ let detailSelectedMetal = "18K Yellow Gold";
 let detailSelectedSize = "7";
 
 function getAdjustedPrice(product, metal) {
+  if (isServiceProduct(product)) {
+    return Number(product.price) || 0;
+  }
+
   const isBasePlatinum = product.name.toLowerCase().includes("platinum");
   if (metal === "Platinum" && !isBasePlatinum) {
     return product.price + 1200;
@@ -413,9 +532,25 @@ function getAdjustedPrice(product, metal) {
   return product.price;
 }
 
+function getAgentforceRecommendationLabel() {
+  const stored = sessionStorage.getItem("lumina_agentforce_recommendation_context") ||
+    localStorage.getItem("lumina_agentforce_recommendation_context");
+  if (!stored) return "Recommended rings";
+
+  try {
+    const parsed = JSON.parse(stored);
+    return parsed?.label || "Recommended rings";
+  } catch (error) {
+    return "Recommended rings";
+  }
+}
+
 // --- SPA Hash Router ---
 function handleRouting() {
   const hash = window.location.hash;
+  const productRouteMatch = hash.match(/^#\/?product\/([^/?#]+)/);
+  const recommendedRouteMatch = hash.match(/^#\/?recommended\/(.+)/);
+  const legacyRecommendationRouteMatch = hash.match(/^#\/?recommendation\/(.+)/);
   const productDetailSection = document.getElementById("productDetailSection");
   const loyaltyProfileSection = document.getElementById("loyaltyProfileSection");
   const heroBanner = document.getElementById("heroBanner");
@@ -424,11 +559,21 @@ function handleRouting() {
 
   if (!productDetailSection) return;
 
-  if (hash === "#/loyalty") {
-    // Hide home sections
+  const hideHomeSections = () => {
     if (heroBanner) heroBanner.style.display = "none";
     if (carouselSection) carouselSection.style.display = "none";
     if (highlightSection) highlightSection.style.display = "none";
+  };
+
+  const hideLoyaltyProfile = () => {
+    if (loyaltyProfileSection) {
+      loyaltyProfileSection.style.display = "none";
+      loyaltyProfileSection.innerHTML = "";
+    }
+  };
+
+  if (hash === "#/loyalty") {
+    hideHomeSections();
 
     // Hide product detail
     productDetailSection.style.display = "none";
@@ -442,21 +587,13 @@ function handleRouting() {
 
     // Scroll to top
     window.scrollTo({ top: 0, behavior: "smooth" });
-  } else if (hash.startsWith("#/product/")) {
-    const productId = hash.replace("#/product/", "");
-    const product = products.find(p => p.id === productId);
+  } else if (productRouteMatch) {
+    const productId = decodeURIComponent(productRouteMatch[1]);
+    const product = findProductByCode(productId);
 
-    if (product) {
-      // Hide home sections
-      if (heroBanner) heroBanner.style.display = "none";
-      if (carouselSection) carouselSection.style.display = "none";
-      if (highlightSection) highlightSection.style.display = "none";
-
-      // Hide loyalty profile
-      if (loyaltyProfileSection) {
-        loyaltyProfileSection.style.display = "none";
-        loyaltyProfileSection.innerHTML = "";
-      }
+    if (product && !isServiceProduct(product)) {
+      hideHomeSections();
+      hideLoyaltyProfile();
 
       // Show detail section
       productDetailSection.style.display = "block";
@@ -465,6 +602,26 @@ function handleRouting() {
       renderProductDetail(product);
 
       // Scroll to top
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      window.location.hash = "#";
+    }
+  } else if (recommendedRouteMatch || legacyRecommendationRouteMatch) {
+    const routeMatch = recommendedRouteMatch || legacyRecommendationRouteMatch;
+    const recommendedProductCodes = routeMatch[1]
+      .split("/")
+      .map(productCode => decodeURIComponent(productCode).trim())
+      .filter(Boolean);
+    const recommendedProducts = recommendedProductCodes
+      .map(productCode => findProductByCode(productCode))
+      .filter(product => product && !isServiceProduct(product));
+
+    if (recommendedProducts.length > 0) {
+      hideHomeSections();
+      hideLoyaltyProfile();
+
+      productDetailSection.style.display = "block";
+      renderRecommendedProducts(recommendedProducts);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
       window.location.hash = "#";
@@ -480,10 +637,7 @@ function handleRouting() {
     productDetailSection.innerHTML = "";
 
     // Hide loyalty profile
-    if (loyaltyProfileSection) {
-      loyaltyProfileSection.style.display = "none";
-      loyaltyProfileSection.innerHTML = "";
-    }
+    hideLoyaltyProfile();
 
     // If there was an anchor hash, scroll to it
     if (hash && hash !== "#" && hash.startsWith("#")) {
@@ -766,6 +920,110 @@ function renderProductDetail(product) {
   renderContent();
 }
 
+function renderRecommendedProducts(recommendedProducts) {
+  const container = document.getElementById("productDetailSection");
+  if (!container) return;
+
+  const primaryProduct = recommendedProducts[0];
+  const totalPrice = recommendedProducts.reduce((sum, product) => {
+    const defaultMetal = product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold";
+    return sum + getAdjustedPrice(product, defaultMetal);
+  }, 0);
+  const recommendationLabel = getAgentforceRecommendationLabel();
+
+  container.innerHTML = `
+    <div class="breadcrumbs container">
+      <a href="#">Home</a> &gt; <a href="#carousel-section">Fine Jewelry</a> &gt; <span>Recommended Rings</span>
+    </div>
+
+    <div class="container recommended-detail-grid agent-highlighted">
+      <div class="recommended-gallery">
+        <div class="recommended-thumb-rail" id="recommendedThumbRail">
+          ${recommendedProducts.map((product, index) => `
+            <button class="recommended-thumb-btn ${index === 0 ? "active" : ""}" data-product-id="${product.id}" aria-label="View ${product.name}">
+              <img src="${product.image}" alt="${product.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+              <span class="recommended-thumb-fallback" style="display:none;">${getInitials(product.name)}</span>
+            </button>
+          `).join("")}
+        </div>
+        <div class="recommended-main-image-wrapper">
+          <img src="${primaryProduct.image}" alt="${primaryProduct.name}" id="recommendedMainImg" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div class="card-img-fallback" style="display:none; font-size: 2rem;">
+            <div class="fallback-icon">âœ¦</div>
+            <div class="fallback-initials">${getInitials(primaryProduct.name)}</div>
+            <div style="font-size: 1rem; text-transform: uppercase; opacity: 0.7;">Lumina Fine</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="recommended-info">
+        <span class="detail-brand-header">LUMINA AGENTFORCE</span>
+        <h2 class="detail-product-title">${recommendationLabel}</h2>
+       
+        <p class="recommended-copy">Your Agentforce specialist selected ${recommendedProducts.length} ring${recommendedProducts.length === 1 ? "" : "s"} for this request. Review the options below or open an individual product page.</p>
+
+        <hr class="detail-divider">
+
+        <div class="recommended-product-list">
+          ${recommendedProducts.map((product, index) => {
+            const defaultMetal = product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold";
+            return `
+              <button class="recommended-product-row ${index === 0 ? "active" : ""}" data-product-id="${product.id}">
+                <span>
+                  <strong>${product.name}</strong>
+                  <small>${product.description}</small>
+                </span>
+                <em>$${getAdjustedPrice(product, defaultMetal).toLocaleString()}</em>
+              </button>
+            `;
+          }).join("")}
+        </div>
+        
+        <hr class="detail-divider">
+        <div class="detail-product-price detail-total-price">
+          <span>Total</span>
+          <span>$${totalPrice.toLocaleString()}</span>
+        </div>
+        <div class="recommended-actions">
+          <a class="btn-primary recommended-primary-link" href="#/product/${primaryProduct.id}">View Selected Ring</a>
+          <button class="btn-form submit" id="btnAddRecommendedSet">Add All to Bag</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const mainImg = document.getElementById("recommendedMainImg");
+  const thumbButtons = container.querySelectorAll(".recommended-thumb-btn");
+  const productRows = container.querySelectorAll(".recommended-product-row");
+
+  const selectProduct = productId => {
+    const selectedProduct = recommendedProducts.find(product => product.id === productId);
+    if (!selectedProduct || !mainImg) return;
+
+    mainImg.src = selectedProduct.image;
+    mainImg.alt = selectedProduct.name;
+
+    thumbButtons.forEach(button => button.classList.toggle("active", button.dataset.productId === productId));
+    productRows.forEach(row => row.classList.toggle("active", row.dataset.productId === productId));
+
+    const selectedLink = container.querySelector(".recommended-primary-link");
+    if (selectedLink) {
+      selectedLink.href = `#/product/${selectedProduct.id}`;
+      selectedLink.textContent = `View ${selectedProduct.name}`;
+    }
+  };
+
+  [...thumbButtons, ...productRows].forEach(element => {
+    element.addEventListener("click", () => selectProduct(element.dataset.productId));
+  });
+
+  document.getElementById("btnAddRecommendedSet")?.addEventListener("click", () => {
+    recommendedProducts.forEach(product => addToCart(product.id, 1, true));
+    showToast(`Added ${recommendedProducts.length} recommended ring${recommendedProducts.length === 1 ? "" : "s"} to Cart`, "success");
+    openCart();
+  });
+}
+
 // --- UI Render Engines ---
 function renderAll() {
   renderCarousel();
@@ -776,7 +1034,7 @@ function renderAll() {
   
   // Rerender active detail view if open
   const hash = window.location.hash;
-  if (hash.startsWith("#/product/")) {
+  if (/^#\/?(product|recommended|recommendation)\//.test(hash)) {
     handleRouting();
   }
 }
@@ -985,14 +1243,16 @@ function renderCartDrawer() {
   let subtotal = 0;
 
   container.innerHTML = cart.map(item => {
-    const product = products.find(p => p.id === item.productId);
+    const product = findProductByCode(item.productId);
     if (!product) return "";
 
-    const itemMetal = item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
-    const itemSize = item.size || "7";
+    const isService = isServiceProduct(product);
+    const itemMetal = isService ? "Service" : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
+    const itemSize = isService ? "N/A" : (item.size || "7");
     const adjustedPrice = getAdjustedPrice(product, itemMetal);
     subtotal += adjustedPrice * item.quantity;
     const initials = getInitials(product.name);
+    const itemMeta = isService ? "Services" : `${itemMetal} | Size ${itemSize}`;
 
     return `
       <div class="cart-item">
@@ -1004,7 +1264,7 @@ function renderCartDrawer() {
         </div>
         <div class="cart-item-info">
           <div class="cart-item-title">${product.name}</div>
-          <div class="cart-item-meta" style="font-size:0.75rem; color:var(--color-text-secondary); margin-top:2px;">${itemMetal} | Size ${itemSize}</div>
+          <div class="cart-item-meta" style="font-size:0.75rem; color:var(--color-text-secondary); margin-top:2px;">${itemMeta}</div>
           <div class="cart-item-price" style="font-size:0.85rem; font-weight:500;">$${adjustedPrice.toLocaleString()}</div>
           <div class="cart-item-qty" style="margin-top:4px;">
             <button class="qty-btn" onclick="changeQty('${product.id}', '${itemMetal}', '${itemSize}', -1)">-</button>
@@ -1280,6 +1540,71 @@ function highlightProductInUI(productId, productName) {
   }, 300);
 }
 
+window.LuminaStorefront = {
+  addAgentforceCartItems(productCodes = [], options = {}) {
+    const codes = productCodes
+      .map(productCode => String(productCode || "").trim())
+      .filter(Boolean);
+
+    if (codes.length === 0) return { added: [], missing: [] };
+
+    const added = [];
+    const missing = [];
+    const serviceDetailsByCode = options.serviceDetailsByCode || {};
+    const productDetailsByCode = options.productDetailsByCode || {};
+
+    codes.forEach(productCode => {
+      let product = findProductByCode(productCode);
+
+      if (!product && options.serviceCodes?.includes(productCode)) {
+        product = upsertAgentforceServiceProduct(productCode, serviceDetailsByCode[productCode] || {});
+      }
+
+      if (!product && productDetailsByCode[productCode]) {
+        product = upsertAgentforceRingProduct(productCode, productDetailsByCode[productCode]);
+      }
+
+      if (!product) {
+        missing.push(productCode);
+        return;
+      }
+
+      addToCart(product.id || product.productCode, 1, true, null, null, "agentforce");
+      added.push(product.id || product.productCode);
+    });
+
+    if (options.applyAgentforceDiscount !== false && added.length > 0) {
+      applyPromoCode("AGENT15");
+    }
+
+    if (added.length > 0) {
+      showToast(`Agentforce added ${added.length} item${added.length === 1 ? "" : "s"} to Cart`, "success");
+      window.setTimeout(() => {
+        renderCartDrawer();
+        openCart();
+      }, 0);
+    }
+
+    if (missing.length > 0) {
+      showToast(`Agentforce item not found: ${missing.join(", ")}`, "error");
+    }
+
+    return { added, missing };
+  },
+  getProduct(productCode) {
+    return findProductByCode(productCode);
+  },
+  createServiceProduct(productCode, details = {}) {
+    return upsertAgentforceServiceProduct(productCode, details);
+  },
+  createRingProduct(productCode, details = {}) {
+    return upsertAgentforceRingProduct(productCode, details);
+  },
+  applyAgentforceDiscount() {
+    return applyPromoCode("AGENT15");
+  }
+};
+
 // --- Event Listeners and Bindings ---
 function setupEventListeners() {
   // Cart toggle
@@ -1431,9 +1756,9 @@ function setupEventListeners() {
       // Calculate current subtotal and discount to know max needed points
       let subtotal = 0;
       cart.forEach(item => {
-        const product = products.find(p => p.id === item.productId);
+        const product = findProductByCode(item.productId);
         if (product) {
-          const itemMetal = item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
+          const itemMetal = isServiceProduct(product) ? "Service" : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
           const adjustedPrice = getAdjustedPrice(product, itemMetal);
           subtotal += adjustedPrice * item.quantity;
         }
@@ -1469,9 +1794,9 @@ function setupEventListeners() {
     btnUseMaxLoyalty.addEventListener("click", () => {
       let subtotal = 0;
       cart.forEach(item => {
-        const product = products.find(p => p.id === item.productId);
+        const product = findProductByCode(item.productId);
         if (product) {
-          const itemMetal = item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
+          const itemMetal = isServiceProduct(product) ? "Service" : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
           const adjustedPrice = getAdjustedPrice(product, itemMetal);
           subtotal += adjustedPrice * item.quantity;
         }
@@ -1524,9 +1849,9 @@ function processCheckout() {
   // Calculate final numbers
   let subtotal = 0;
   cart.forEach(item => {
-    const product = products.find(p => p.id === item.productId);
+    const product = findProductByCode(item.productId);
     if (product) {
-      const itemMetal = item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
+      const itemMetal = isServiceProduct(product) ? "Service" : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
       const adjustedPrice = getAdjustedPrice(product, itemMetal);
       subtotal += adjustedPrice * item.quantity;
     }
@@ -1591,14 +1916,17 @@ function processCheckout() {
 
   // Log order to purchase history
   const orderItems = cart.map(item => {
-    const product = products.find(p => p.id === item.productId);
-    const itemMetal = item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold");
+    const product = findProductByCode(item.productId);
+    if (!product) return null;
+    const isService = isServiceProduct(product);
+    const itemMetal = isService ? "Service" : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
+    const itemLabel = isService ? product.name : `${product.name} (${itemMetal}, Size ${item.size})`;
     return {
-      name: `${product.name} (${itemMetal}, Size ${item.size})`,
+      name: itemLabel,
       price: getAdjustedPrice(product, itemMetal),
       quantity: item.quantity
     };
-  });
+  }).filter(Boolean);
 
   const historyEntry = {
     orderId: orderNum,
