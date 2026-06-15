@@ -99,6 +99,16 @@ const DEFAULT_PRODUCTS = [
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (9).png",
     keywords: "bezel, solitaire, round bezel, platinum, bezel set",
     highlighted: false
+  },
+  {
+    id: "ENGRAVE-05",
+    name: "Engraving services 05",
+    price: 350,
+    category: "Services",
+    description: "Personalize your ring with custom engraving.",
+    image: "images/engraving.png",
+    keywords: "engraving, customized",
+    highlighted: false
   }
 ];
 
