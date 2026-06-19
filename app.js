@@ -652,12 +652,17 @@ function handleRouting() {
 
     // Parse params and restore cart if applicable
     const params = getHashParams();
+    const cartId = cartRouteMatch[1];
+    const localCartId = localStorage.getItem("lumina_cart_id");
+
     if (params.items) {
-      restoreCartFromQuery(params.items);
+      if (localCartId !== cartId || cart.length === 0) {
+        restoreCartFromQuery(params.items);
+        if (cartId) localStorage.setItem("lumina_cart_id", cartId);
+      }
     } else {
-      const cartId = cartRouteMatch[1];
-      // If no items in URL and local cart is empty, restore dummy items as fallback for email load
-      if (cart.length === 0 && cartId) {
+      // If no items in URL, but the cartId in URL is different from local cartId (e.g. clicked email link), or local cart is empty
+      if (cartId && (localCartId !== cartId || cart.length === 0 || cartId === "CRT-DEMO123")) {
         restoreDummyCart(cartId);
       }
     }
