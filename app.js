@@ -659,18 +659,23 @@ function updateLoyaltyUI() {
   }
 }
 
-function addToCart(productId, quantity = 1, silent = false, metal = null, size = null, source = null) {
+function addToCart(productId, quantity = 1, silent = false, metal = null, size = null, source = null, cartIdOverride = "") {
   const product = findProductByCode(productId);
   if (!product) return;
 
   const itemSource = source || product.source || "storefront";
-  const currentCartId = normalizeCartId(activeCartId) || normalizeCartId(localStorage.getItem(ACTIVE_CART_ID_STORAGE_KEY));
+  const explicitCartId = normalizeCartId(cartIdOverride);
+  const currentCartId = explicitCartId || normalizeCartId(activeCartId) || normalizeCartId(localStorage.getItem(ACTIVE_CART_ID_STORAGE_KEY));
+  if (itemSource === "agentforce" && !explicitCartId) {
+    console.warn("[Cart] Ignored Agentforce add-to-cart without Order.Lumina_Cart_Id__c cart id.", { productId });
+    return;
+  }
+
   const shouldUseStorefrontCart = itemSource !== "agentforce" && (!currentCartId || isAgentforceCartRecord(currentCartId));
-  const shouldUseAgentforceCart = itemSource === "agentforce" && (!currentCartId || !isAgentforceCartRecord(currentCartId));
   const hadActiveCartId = Boolean(currentCartId) && !shouldUseStorefrontCart;
   const preferredCartId = shouldUseStorefrontCart
     ? getStorefrontCartId()
-    : (shouldUseAgentforceCart ? generateCartId("CART-AGENT") : "");
+    : (itemSource === "agentforce" ? explicitCartId : "");
   const cartId = prepareCartForMutation(preferredCartId);
   const productKey = product.id || product.productCode || productId;
   const itemMetal = isServiceProduct(product) ? "Service" : (metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
@@ -1944,7 +1949,14 @@ window.LuminaStorefront = {
 
     const added = [];
     const missing = [];
-    const targetCartId = prepareCartForMutation(options.cartId || "");
+    const targetCartId = normalizeCartId(options.cartId || "");
+    if (!targetCartId) {
+      console.warn("[Cart] Agentforce add-to-cart ignored because no Order.Lumina_Cart_Id__c cart id was provided.", { productCodes: codes });
+      showToast("Agentforce cart id was not found. Please try adding the item again.", "error");
+      return { added, missing: codes, cartId: "" };
+    }
+
+    prepareCartForMutation(targetCartId);
     const serviceDetailsByCode = options.serviceDetailsByCode || {};
     const productDetailsByCode = options.productDetailsByCode || {};
 
@@ -1964,8 +1976,12 @@ window.LuminaStorefront = {
         return;
       }
 
-      addToCart(product.id || product.productCode, 1, true, null, null, "agentforce");
-      added.push(product.id || product.productCode);
+      const addedProductCode = product.id || product.productCode;
+      addToCart(addedProductCode, 1, true, null, null, "agentforce", targetCartId);
+
+      if (getCartItemsForCartId(targetCartId).some(item => item.productId === addedProductCode)) {
+        added.push(addedProductCode);
+      }
     });
 
     if (added.length > 0) {
@@ -1984,6 +2000,19 @@ window.LuminaStorefront = {
   },
   getProduct(productCode) {
     return findProductByCode(productCode);
+  },
+  getCartById(cartId) {
+    const record = getCartRecord(cartId);
+    return record
+      ? { ...record, items: sanitizeCartItems(record.items || []) }
+      : null;
+  },
+  openCartById(cartId) {
+    const normalizedCartId = normalizeCartId(cartId);
+    if (!normalizedCartId) return false;
+
+    window.location.hash = `#cart/${encodeURIComponent(normalizedCartId)}`;
+    return !!getCartRecord(normalizedCartId);
   },
   createServiceProduct(productCode, details = {}) {
     return upsertAgentforceServiceProduct(productCode, details);
