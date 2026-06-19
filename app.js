@@ -123,12 +123,24 @@ const DEFAULT_PRODUCTS = [
 ];
 
 // --- Application State ---
+const CART_STORAGE_KEY = "lumina_cart";
+const CARTS_BY_ID_STORAGE_KEY = "lumina_carts_by_id";
+const ACTIVE_CART_ID_STORAGE_KEY = "lumina_cart_id";
+const STOREFRONT_CART_ID_STORAGE_KEY = "lumina_storefront_cart_id";
+const AGENTFORCE_PROMO_CODE = "AGENT15";
+const AGENTFORCE_PROMO_PERCENT = 15;
+
 let products = [];
 let agentforceProducts = [];
 let cart = [];
+let activeCartId = null;
+let viewingAllCarts = false;
 let activeDiscount = 0; // percentage, e.g. 15 for 15%
 let activeDiscountCode = "";
 let editingProductId = null;
+let selectedCartItemKeys = new Set();
+let hasManualCartSelection = false;
+let lastCartRouteKey = "";
 
 // --- Loyalty Program State ---
 let userLoyaltyPoints = 850;
@@ -330,11 +342,210 @@ function deleteProduct(id) {
 }
 
 // --- Cart Operations ---
+function normalizeCartId(cartId) {
+  const normalized = String(cartId || "").trim();
+  if (!normalized) return "";
+
+  try {
+    return decodeURIComponent(normalized).replace(/[?#].*$/, "").trim();
+  } catch (e) {
+    return normalized.replace(/[?#].*$/, "").trim();
+  }
+}
+
+function generateCartId(prefix = "CART") {
+  return `${prefix}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+}
+
+function isSalesforceOrderCartId(cartId) {
+  return /^CART-\d+$/i.test(normalizeCartId(cartId));
+}
+
+function readCartRegistry() {
+  const stored = localStorage.getItem(CARTS_BY_ID_STORAGE_KEY);
+  if (!stored) return {};
+
+  try {
+    const parsed = JSON.parse(stored);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function writeCartRegistry(registry) {
+  localStorage.setItem(CARTS_BY_ID_STORAGE_KEY, JSON.stringify(registry || {}));
+}
+
+function sanitizeCartItems(items) {
+  return (Array.isArray(items) ? items : [])
+    .filter(Boolean)
+    .map(({ cartId, ...item }) => ({ ...item }));
+}
+
+function getCartRecord(cartId) {
+  const normalizedCartId = normalizeCartId(cartId);
+  if (!normalizedCartId) return null;
+
+  return readCartRegistry()[normalizedCartId] || null;
+}
+
+function isAgentforceCartRecord(cartId) {
+  const normalizedCartId = normalizeCartId(cartId);
+  const record = getCartRecord(normalizedCartId);
+  const items = sanitizeCartItems(record?.items || []);
+
+  return isSalesforceOrderCartId(normalizedCartId) || items.some(item => item.source === "agentforce");
+}
+
+function getStorefrontCartId() {
+  const existingCartId = normalizeCartId(localStorage.getItem(STOREFRONT_CART_ID_STORAGE_KEY));
+  if (existingCartId && !isAgentforceCartRecord(existingCartId)) {
+    return existingCartId;
+  }
+
+  const cartId = generateCartId("CART-WEB");
+  localStorage.setItem(STOREFRONT_CART_ID_STORAGE_KEY, cartId);
+  return cartId;
+}
+
+function getCartItemsForCartId(cartId) {
+  const record = getCartRecord(cartId);
+  return sanitizeCartItems(record?.items || []);
+}
+
+function saveCartRecord(cartId, items = cart) {
+  const normalizedCartId = normalizeCartId(cartId);
+  if (!normalizedCartId) return;
+
+  const registry = readCartRegistry();
+  registry[normalizedCartId] = {
+    ...(registry[normalizedCartId] || {}),
+    cartId: normalizedCartId,
+    items: sanitizeCartItems(items),
+    discount: {
+      percent: activeDiscount,
+      code: activeDiscountCode
+    },
+    updatedAt: new Date().toISOString(),
+    createdAt: registry[normalizedCartId]?.createdAt || new Date().toISOString()
+  };
+  writeCartRegistry(registry);
+}
+
+function removeCartRecord(cartId) {
+  const normalizedCartId = normalizeCartId(cartId);
+  if (!normalizedCartId) return;
+
+  const registry = readCartRegistry();
+  delete registry[normalizedCartId];
+  writeCartRegistry(registry);
+}
+
+function ensureActiveCartId(preferredCartId = "") {
+  const normalizedPreferred = normalizeCartId(preferredCartId);
+  const normalizedActive = normalizeCartId(activeCartId);
+  const storedActive = normalizeCartId(localStorage.getItem(ACTIVE_CART_ID_STORAGE_KEY));
+  const cartId = normalizedPreferred || normalizedActive || storedActive || generateCartId();
+
+  activeCartId = cartId;
+  localStorage.setItem(ACTIVE_CART_ID_STORAGE_KEY, cartId);
+  return cartId;
+}
+
+function prepareCartForMutation(preferredCartId = "") {
+  const previousCartId = activeCartId;
+  const cartId = ensureActiveCartId(preferredCartId);
+
+  if (viewingAllCarts || previousCartId !== cartId) {
+    cart = getCartItemsForCartId(cartId);
+  }
+
+  viewingAllCarts = false;
+  activeCartId = cartId;
+  return cartId;
+}
+
+function applyCartRecordDiscount(record) {
+  activeDiscount = Number(record?.discount?.percent) || 0;
+  activeDiscountCode = record?.discount?.code || "";
+}
+
+function loadCartById(cartId) {
+  const normalizedCartId = normalizeCartId(cartId);
+  const record = getCartRecord(normalizedCartId);
+
+  activeCartId = normalizedCartId || null;
+  viewingAllCarts = false;
+  cart = sanitizeCartItems(record?.items || []);
+  applyCartRecordDiscount(record);
+
+  if (activeCartId) {
+    localStorage.setItem(ACTIVE_CART_ID_STORAGE_KEY, activeCartId);
+  }
+  localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+  updateCartCount();
+  renderCartDrawer();
+}
+
+function getAllCartRecords() {
+  const registry = readCartRegistry();
+  return Object.values(registry)
+    .filter(record => record && Array.isArray(record.items))
+    .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+}
+
+function loadAllCarts() {
+  const records = getAllCartRecords();
+  activeCartId = null;
+  viewingAllCarts = true;
+
+  if (records.length === 0) {
+    const stored = localStorage.getItem(CART_STORAGE_KEY);
+    try {
+      cart = stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      cart = [];
+    }
+  } else {
+    cart = records.flatMap(record =>
+      sanitizeCartItems(record.items).map(item => ({
+        ...item,
+        cartId: record.cartId
+      }))
+    );
+    applyCartRecordDiscount(records.find(record => Number(record?.discount?.percent) > 0) || null);
+  }
+
+  localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+  updateCartCount();
+  renderCartDrawer();
+}
+
+function isCartHash(hash = window.location.hash) {
+  return /^#\/?cart(?:\/|$)/.test(hash || "");
+}
+
 function initCart() {
-  const stored = localStorage.getItem("lumina_cart");
+  const storedActiveCartId = normalizeCartId(localStorage.getItem(ACTIVE_CART_ID_STORAGE_KEY));
+  const storedActiveRecord = storedActiveCartId ? getCartRecord(storedActiveCartId) : null;
+
+  if (storedActiveRecord) {
+    activeCartId = storedActiveCartId;
+    cart = sanitizeCartItems(storedActiveRecord.items);
+    applyCartRecordDiscount(storedActiveRecord);
+    updateCartCount();
+    return;
+  }
+
+  const stored = localStorage.getItem(CART_STORAGE_KEY);
   if (stored) {
     try {
       cart = JSON.parse(stored);
+      if (storedActiveCartId && cart.length > 0) {
+        activeCartId = storedActiveCartId;
+        saveCartRecord(activeCartId, cart);
+      }
       updateCartCount();
     } catch (e) {
       cart = [];
@@ -355,7 +566,17 @@ function initCart() {
 }
 
 function saveCart(updateHash = true) {
-  localStorage.setItem("lumina_cart", JSON.stringify(cart));
+  if (!viewingAllCarts && activeCartId) {
+    if (cart.length > 0) {
+      saveCartRecord(activeCartId, cart);
+    } else {
+      removeCartRecord(activeCartId);
+      localStorage.removeItem(ACTIVE_CART_ID_STORAGE_KEY);
+      activeCartId = null;
+    }
+  }
+
+  localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
   localStorage.setItem("lumina_active_discount", JSON.stringify({
     percent: activeDiscount,
     code: activeDiscountCode
@@ -363,22 +584,8 @@ function saveCart(updateHash = true) {
   updateCartCount();
   renderCartDrawer();
   
-  if (window.location.hash.startsWith("#/cart")) {
+  if (isCartHash()) {
     renderCartPage();
-    if (updateHash && cart.length > 0) {
-      let cartId = localStorage.getItem("lumina_cart_id");
-      if (!cartId) {
-        cartId = "CRT-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-        localStorage.setItem("lumina_cart_id", cartId);
-      }
-      const itemsParam = getCartItemsQueryParam();
-      const newHash = `#/cart/${cartId}${itemsParam ? '?' + itemsParam : ''}`;
-      window.removeEventListener("hashchange", handleRouting);
-      window.location.hash = newHash;
-      setTimeout(() => {
-        window.addEventListener("hashchange", handleRouting);
-      }, 50);
-    }
   }
 }
 
@@ -453,8 +660,16 @@ function addToCart(productId, quantity = 1, silent = false, metal = null, size =
   const product = findProductByCode(productId);
   if (!product) return;
 
-  const productKey = product.id || product.productCode || productId;
   const itemSource = source || product.source || "storefront";
+  const currentCartId = normalizeCartId(activeCartId) || normalizeCartId(localStorage.getItem(ACTIVE_CART_ID_STORAGE_KEY));
+  const shouldUseStorefrontCart = itemSource !== "agentforce" && (!currentCartId || isAgentforceCartRecord(currentCartId));
+  const shouldUseAgentforceCart = itemSource === "agentforce" && (!currentCartId || !isAgentforceCartRecord(currentCartId));
+  const hadActiveCartId = Boolean(currentCartId) && !shouldUseStorefrontCart;
+  const preferredCartId = shouldUseStorefrontCart
+    ? getStorefrontCartId()
+    : (shouldUseAgentforceCart ? generateCartId("CART-AGENT") : "");
+  const cartId = prepareCartForMutation(preferredCartId);
+  const productKey = product.id || product.productCode || productId;
   const itemMetal = isServiceProduct(product) ? "Service" : (metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
   const itemSize = isServiceProduct(product) ? "N/A" : (size || "7");
 
@@ -480,17 +695,16 @@ function addToCart(productId, quantity = 1, silent = false, metal = null, size =
   }
   saveCart();
   
-  let cartId = localStorage.getItem("lumina_cart_id");
-  if (!cartId) {
-    cartId = "CRT-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-    localStorage.setItem("lumina_cart_id", cartId);
+  if (!hadActiveCartId && itemSource !== "agentforce") {
     transmitCartIdToCRM(cartId);
   }
   
   if (!silent) {
     const optionLabel = isServiceProduct(product) ? "" : ` (${itemMetal}, Size ${itemSize})`;
     showToast(`Added ${product.name}${optionLabel} to Cart`, "success");
-    openCart();
+    if (itemSource === "agentforce") {
+      openCart();
+    }
     // Animate cart badge
     const badge = document.querySelector(".cart-count");
     if (badge) {
@@ -501,7 +715,51 @@ function addToCart(productId, quantity = 1, silent = false, metal = null, size =
   }
 }
 
-function changeQty(productId, metal, size, change) {
+function refreshCartViewAfterRecordMutation(cartId) {
+  if (viewingAllCarts || !normalizeCartId(activeCartId)) {
+    loadAllCarts();
+  } else {
+    loadCartById(cartId || activeCartId);
+  }
+
+  if (isCartHash()) {
+    renderCartPage();
+  }
+}
+
+function changeQty(productId, metal, size, change, cartId = null) {
+  const targetCartId = normalizeCartId(cartId);
+
+  if (targetCartId && targetCartId !== normalizeCartId(activeCartId)) {
+    const record = getCartRecord(targetCartId);
+    if (!record) return;
+
+    const items = sanitizeCartItems(record.items);
+    const item = items.find(i =>
+      i.productId === productId &&
+      i.metal === metal &&
+      i.size === size
+    );
+    if (!item) return;
+
+    item.quantity += change;
+    const nextItems = item.quantity <= 0
+      ? items.filter(i => !(i.productId === productId && i.metal === metal && i.size === size))
+      : items;
+
+    if (nextItems.length > 0) {
+      const previousDiscount = { percent: activeDiscount, code: activeDiscountCode };
+      applyCartRecordDiscount(record);
+      saveCartRecord(targetCartId, nextItems);
+      activeDiscount = previousDiscount.percent;
+      activeDiscountCode = previousDiscount.code;
+    } else {
+      removeCartRecord(targetCartId);
+    }
+    refreshCartViewAfterRecordMutation(targetCartId);
+    return;
+  }
+
   const item = cart.find(i => 
     i.productId === productId && 
     i.metal === metal && 
@@ -517,7 +775,31 @@ function changeQty(productId, metal, size, change) {
   }
 }
 
-function removeFromCart(productId, metal = null, size = null) {
+function removeFromCart(productId, metal = null, size = null, cartId = null) {
+  const targetCartId = normalizeCartId(cartId);
+
+  if (targetCartId && targetCartId !== normalizeCartId(activeCartId)) {
+    const record = getCartRecord(targetCartId);
+    if (!record) return;
+
+    const items = sanitizeCartItems(record.items);
+    const nextItems = metal && size
+      ? items.filter(item => !(item.productId === productId && item.metal === metal && item.size === size))
+      : items.filter(item => item.productId !== productId);
+
+    if (nextItems.length > 0) {
+      const previousDiscount = { percent: activeDiscount, code: activeDiscountCode };
+      applyCartRecordDiscount(record);
+      saveCartRecord(targetCartId, nextItems);
+      activeDiscount = previousDiscount.percent;
+      activeDiscountCode = previousDiscount.code;
+    } else {
+      removeCartRecord(targetCartId);
+    }
+    refreshCartViewAfterRecordMutation(targetCartId);
+    return;
+  }
+
   if (metal && size) {
     cart = cart.filter(item => 
       !(item.productId === productId && item.metal === metal && item.size === size)
@@ -539,7 +821,15 @@ function updateCartCount() {
 
 function applyPromoCode(code) {
   const normalized = code.trim().toUpperCase();
-  if (normalized === "WELCOME15" || normalized === "AGENT15") {
+  if (normalized === AGENTFORCE_PROMO_CODE) {
+    activeDiscount = 0;
+    activeDiscountCode = "";
+    saveCart(false);
+    showToast(`${AGENTFORCE_PROMO_CODE} applies automatically to Agentforce cart items`, "success");
+    return true;
+  }
+
+  if (normalized === "WELCOME15") {
     activeDiscount = 15;
     activeDiscountCode = normalized;
     saveCart();
@@ -626,6 +916,10 @@ function handleRouting() {
     }
   };
 
+  if (!cartRouteMatch) {
+    lastCartRouteKey = "";
+  }
+
   if (hash === "#/loyalty") {
     hideHomeSections();
     hideCartPage();
@@ -650,21 +944,17 @@ function handleRouting() {
     productDetailSection.style.display = "none";
     productDetailSection.innerHTML = "";
 
-    // Parse params and restore cart if applicable
-    const params = getHashParams();
-    const cartId = cartRouteMatch[1];
-    const localCartId = localStorage.getItem("lumina_cart_id");
+    const cartId = normalizeCartId(cartRouteMatch[1]);
+    const cartRouteKey = cartId ? `cart:${cartId}` : "cart:all";
+    if (lastCartRouteKey !== cartRouteKey) {
+      resetCartSelection();
+      lastCartRouteKey = cartRouteKey;
+    }
 
-    if (params.items) {
-      if (localCartId !== cartId || cart.length === 0) {
-        restoreCartFromQuery(params.items);
-        if (cartId) localStorage.setItem("lumina_cart_id", cartId);
-      }
+    if (cartId) {
+      loadCartById(cartId);
     } else {
-      // If no items in URL, but the cartId in URL is different from local cartId (e.g. clicked email link), or local cart is empty
-      if (cartId && (localCartId !== cartId || cart.length === 0 || cartId === "CRT-DEMO123")) {
-        restoreDummyCart(cartId);
-      }
+      loadAllCarts();
     }
 
     // Show cart page section
@@ -1111,7 +1401,6 @@ function renderRecommendedProducts(recommendedProducts) {
   document.getElementById("btnAddRecommendedSet")?.addEventListener("click", () => {
     recommendedProducts.forEach(product => addToCart(product.id, 1, true));
     showToast(`Added ${recommendedProducts.length} recommended ring${recommendedProducts.length === 1 ? "" : "s"} to Cart`, "success");
-    openCart();
   });
 }
 
@@ -1343,7 +1632,12 @@ function renderCartDrawer() {
     const adjustedPrice = getAdjustedPrice(product, itemMetal);
     subtotal += adjustedPrice * item.quantity;
     const initials = getInitials(product.name);
-    const itemMeta = isService ? "Services" : `${itemMetal} | Size ${itemSize}`;
+    const itemCartId = normalizeCartId(item.cartId || activeCartId);
+    const cartActionArg = itemCartId ? `, '${itemCartId}'` : "";
+    const itemMeta = [
+      isService ? "Services" : `${itemMetal} | Size ${itemSize}`,
+      viewingAllCarts && itemCartId ? `Cart ${itemCartId}` : ""
+    ].filter(Boolean).join(" | ");
 
     return `
       <div class="cart-item">
@@ -1358,13 +1652,13 @@ function renderCartDrawer() {
           <div class="cart-item-meta" style="font-size:0.75rem; color:var(--color-text-secondary); margin-top:2px;">${itemMeta}</div>
           <div class="cart-item-price" style="font-size:0.85rem; font-weight:500;">$${adjustedPrice.toLocaleString()}</div>
           <div class="cart-item-qty" style="margin-top:4px;">
-            <button class="qty-btn" onclick="changeQty('${product.id}', '${itemMetal}', '${itemSize}', -1)">-</button>
+            <button class="qty-btn" onclick="changeQty('${product.id}', '${itemMetal}', '${itemSize}', -1${cartActionArg})">-</button>
             <span class="qty-value">${item.quantity}</span>
-            <button class="qty-btn" onclick="changeQty('${product.id}', '${itemMetal}', '${itemSize}', 1)">+</button>
+            <button class="qty-btn" onclick="changeQty('${product.id}', '${itemMetal}', '${itemSize}', 1${cartActionArg})">+</button>
           </div>
         </div>
         <div>
-          <button class="cart-item-remove" onclick="removeFromCart('${product.id}', '${itemMetal}', '${itemSize}')">Remove</button>
+          <button class="cart-item-remove" onclick="removeFromCart('${product.id}', '${itemMetal}', '${itemSize}'${cartActionArg})">Remove</button>
         </div>
       </div>
     `;
@@ -1551,6 +1845,7 @@ function handleAgentMessage(messageText, sourceName = "Simulated Agent") {
   // Action variables
   let actionTaken = false;
   let actionDetails = [];
+  let shouldOpenCartPage = false;
 
   // 1. Check for product keyword highlights
   products.forEach(p => {
@@ -1589,8 +1884,9 @@ function handleAgentMessage(messageText, sourceName = "Simulated Agent") {
       const isNameInText = text.includes(productNameLower) || keywords.some(k => k.length > 2 && text.includes(k));
       
       if (isNameInText) {
-        addToCart(p.id, 1);
+        addToCart(p.id, 1, true, null, null, "agentforce");
         actionTaken = true;
+        shouldOpenCartPage = true;
         actionDetails.push(`Added to Cart: ${p.name}`);
       }
     });
@@ -1600,9 +1896,13 @@ function handleAgentMessage(messageText, sourceName = "Simulated Agent") {
   // e.g. "Use code AGENT15 for a discount" or "I applied a coupon code for you"
   const isDiscountIntent = text.includes("discount") || text.includes("promo") || text.includes("coupon") || text.includes("code") || text.includes("percent");
   if (isDiscountIntent) {
-    applyPromoCode("AGENT15");
+    showToast(`${AGENTFORCE_PROMO_CODE} applies to Agentforce cart items`, "success");
     actionTaken = true;
-    actionDetails.push("Applied 15% discount code: AGENT15");
+    actionDetails.push(`Reserved ${AGENTFORCE_PROMO_CODE} for Agentforce cart items`);
+  }
+
+  if (shouldOpenCartPage) {
+    openCart();
   }
 
   // Feedback to developer console
@@ -1641,6 +1941,7 @@ window.LuminaStorefront = {
 
     const added = [];
     const missing = [];
+    const targetCartId = prepareCartForMutation(options.cartId || "");
     const serviceDetailsByCode = options.serviceDetailsByCode || {};
     const productDetailsByCode = options.productDetailsByCode || {};
 
@@ -1664,12 +1965,8 @@ window.LuminaStorefront = {
       added.push(product.id || product.productCode);
     });
 
-    if (options.applyAgentforceDiscount !== false && added.length > 0) {
-      applyPromoCode("AGENT15");
-    }
-
     if (added.length > 0) {
-      showToast(`Agentforce added ${added.length} item${added.length === 1 ? "" : "s"} to Cart`, "success");
+      showToast(`Agentforce added ${added.length} item${added.length === 1 ? "" : "s"} to Cart with ${AGENTFORCE_PROMO_CODE}`, "success");
       window.setTimeout(() => {
         renderCartDrawer();
         openCart();
@@ -1680,7 +1977,7 @@ window.LuminaStorefront = {
       showToast(`Agentforce item not found: ${missing.join(", ")}`, "error");
     }
 
-    return { added, missing };
+    return { added, missing, cartId: targetCartId };
   },
   getProduct(productCode) {
     return findProductByCode(productCode);
@@ -1692,7 +1989,11 @@ window.LuminaStorefront = {
     return upsertAgentforceRingProduct(productCode, details);
   },
   applyAgentforceDiscount() {
-    return applyPromoCode("AGENT15");
+    showToast(`${AGENTFORCE_PROMO_CODE} applies to Agentforce cart items`, "success");
+    if (isCartHash()) {
+      renderCartPage();
+    }
+    return true;
   }
 };
 
@@ -1931,41 +2232,254 @@ function setupEventListeners() {
   if (btnConfirmClose && confirmationOverlay) {
     btnConfirmClose.addEventListener("click", () => {
       confirmationOverlay.classList.remove("active");
-      if (window.location.hash.startsWith("#/cart")) {
+      if (isCartHash()) {
         window.location.hash = "#";
       }
     });
   }
 }
 
-// --- Checkout Simulation with Loyalty Update ---
-function processCheckout() {
-  // Calculate final numbers
+function formatCurrency(amount) {
+  const value = Number(amount) || 0;
+  const hasCents = Math.round(value * 100) % 100 !== 0;
+  return `$${value.toLocaleString(undefined, {
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: 2
+  })}`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeJsString(value) {
+  return String(value ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/\r?\n/g, " ");
+}
+
+function isAgentforceCartItem(item) {
+  const itemCartId = normalizeCartId(item?.cartId || activeCartId);
+  return item?.source === "agentforce" || isSalesforceOrderCartId(itemCartId) || isAgentforceCartRecord(itemCartId);
+}
+
+function getCartItemSource(item) {
+  return isAgentforceCartItem(item) ? "agentforce" : "web";
+}
+
+function getCartItemKey(item, fallbackCartId = activeCartId) {
+  const itemCartId = normalizeCartId(item?.cartId || fallbackCartId) || "legacy";
+  const source = getCartItemSource({ ...item, cartId: itemCartId });
+  return [
+    itemCartId,
+    item?.productId || "",
+    item?.metal || "",
+    item?.size || "",
+    source
+  ].map(part => encodeURIComponent(String(part))).join("|");
+}
+
+function getVisibleCartItemKeys(items = cart) {
+  return items
+    .filter(item => findProductByCode(item.productId))
+    .map(item => getCartItemKey(item));
+}
+
+function resetCartSelection() {
+  selectedCartItemKeys = new Set();
+  hasManualCartSelection = false;
+}
+
+function syncCartSelection(items = cart) {
+  const visibleKeys = getVisibleCartItemKeys(items);
+
+  if (!hasManualCartSelection) {
+    selectedCartItemKeys = new Set(visibleKeys);
+    return selectedCartItemKeys;
+  }
+
+  const visibleKeySet = new Set(visibleKeys);
+  selectedCartItemKeys = new Set([...selectedCartItemKeys].filter(key => visibleKeySet.has(key)));
+  return selectedCartItemKeys;
+}
+
+function getSelectedCartItems() {
+  syncCartSelection();
+  return cart.filter(item => selectedCartItemKeys.has(getCartItemKey(item)));
+}
+
+function getManualPromoPercent() {
+  return activeDiscountCode === "WELCOME15" ? Number(activeDiscount) || 0 : 0;
+}
+
+function getCartItemDiscountPercent(item) {
+  if (getCartItemSource(item) === "agentforce") {
+    return AGENTFORCE_PROMO_PERCENT;
+  }
+
+  return getManualPromoPercent();
+}
+
+function getCartItemLinePricing(item) {
+  const product = findProductByCode(item.productId);
+  if (!product) {
+    return {
+      original: 0,
+      discount: 0,
+      final: 0,
+      discountPercent: 0
+    };
+  }
+
+  const itemMetal = isServiceProduct(product)
+    ? "Service"
+    : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
+  const original = getAdjustedPrice(product, itemMetal) * item.quantity;
+  const discountPercent = getCartItemDiscountPercent(item);
+  const discount = original * (discountPercent / 100);
+
+  return {
+    original,
+    discount,
+    final: Math.max(0, original - discount),
+    discountPercent
+  };
+}
+
+function calculateCartTotals(items = []) {
   let subtotal = 0;
-  cart.forEach(item => {
+  let agentforceSubtotal = 0;
+  let manualPromoSubtotal = 0;
+  let agentforceDiscount = 0;
+  let manualDiscount = 0;
+
+  items.forEach(item => {
     const product = findProductByCode(item.productId);
-    if (product) {
-      const itemMetal = isServiceProduct(product) ? "Service" : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
-      const adjustedPrice = getAdjustedPrice(product, itemMetal);
-      subtotal += adjustedPrice * item.quantity;
+    if (!product) return;
+
+    const linePricing = getCartItemLinePricing(item);
+    subtotal += linePricing.original;
+
+    if (getCartItemSource(item) === "agentforce") {
+      agentforceSubtotal += linePricing.original;
+      agentforceDiscount += linePricing.discount;
+    } else {
+      manualPromoSubtotal += linePricing.original;
+      manualDiscount += linePricing.discount;
     }
   });
 
-  let promoDiscount = 0;
-  if (activeDiscount > 0) {
-    promoDiscount = subtotal * (activeDiscount / 100);
+  const totalPromoDiscount = agentforceDiscount + manualDiscount;
+  const maxDiscountCash = Math.max(0, subtotal - totalPromoDiscount);
+  const maxPointsNeeded = Math.ceil(maxDiscountCash / 0.10);
+  const maxPointsUserCanSpend = Math.min(userLoyaltyPoints, maxPointsNeeded);
+  const normalizedLoyaltyPoints = Math.min(
+    Math.max(Number(appliedLoyaltyPoints) || 0, 0),
+    maxPointsUserCanSpend
+  );
+  const loyaltyDiscount = Math.min(normalizedLoyaltyPoints * 0.10, maxDiscountCash);
+  const total = Math.max(0, subtotal - totalPromoDiscount - loyaltyDiscount);
+
+  return {
+    subtotal,
+    agentforceSubtotal,
+    manualPromoSubtotal,
+    agentforceDiscount,
+    manualDiscount,
+    totalPromoDiscount,
+    loyaltyPoints: normalizedLoyaltyPoints,
+    loyaltyDiscount,
+    total,
+    pointsEarned: Math.max(0, Math.floor(total)),
+    maxDiscountCash,
+    maxPointsNeeded,
+    maxPointsUserCanSpend
+  };
+}
+
+function getCartItemDisplayModel(item) {
+  const product = findProductByCode(item.productId);
+  if (!product) return null;
+
+  const isService = isServiceProduct(product);
+  const itemMetal = isService
+    ? "Service"
+    : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
+  const itemSize = isService ? "N/A" : (item.size || "7");
+  const unitPrice = getAdjustedPrice(product, itemMetal);
+  const itemCartId = normalizeCartId(item.cartId || activeCartId);
+
+  return {
+    item,
+    product,
+    isService,
+    itemMetal,
+    itemSize,
+    unitPrice,
+    lineTotal: unitPrice * item.quantity,
+    itemCartId,
+    source: getCartItemSource(item),
+    key: getCartItemKey(item),
+    initials: getInitials(product.name)
+  };
+}
+
+function removeCartItemsByKeys(itemKeys) {
+  const keys = itemKeys instanceof Set ? itemKeys : new Set(itemKeys);
+  const registry = readCartRegistry();
+  let registryChanged = false;
+
+  Object.entries(registry).forEach(([cartId, record]) => {
+    const items = sanitizeCartItems(record?.items || []);
+    const remainingItems = items.filter(item => !keys.has(getCartItemKey({ ...item, cartId }, cartId)));
+
+    if (remainingItems.length === items.length) return;
+
+    registryChanged = true;
+    if (remainingItems.length > 0) {
+      registry[cartId] = {
+        ...record,
+        items: remainingItems,
+        updatedAt: new Date().toISOString()
+      };
+    } else {
+      delete registry[cartId];
+    }
+  });
+
+  if (registryChanged) {
+    writeCartRegistry(registry);
+    return;
   }
 
-  const maxDiscountCash = subtotal - promoDiscount;
-  const loyaltyDiscount = appliedLoyaltyPoints * 0.10;
-  const finalLoyaltyDiscount = Math.min(loyaltyDiscount, maxDiscountCash);
+  cart = cart.filter(item => !keys.has(getCartItemKey(item)));
+  localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+}
 
-  const total = subtotal - promoDiscount - finalLoyaltyDiscount;
-  const pointsEarned = Math.max(0, Math.floor(total));
+// --- Checkout Simulation with Loyalty Update ---
+function processCheckout() {
+  const checkoutCartId = normalizeCartId(activeCartId);
+  const checkoutAllCarts = viewingAllCarts;
+  const checkoutItems = getSelectedCartItems();
+
+  if (checkoutItems.length === 0) {
+    showToast("Select at least one item to checkout", "error");
+    return;
+  }
+
+  const checkoutItemKeys = new Set(checkoutItems.map(item => getCartItemKey(item)));
+  const totals = calculateCartTotals(checkoutItems);
+  appliedLoyaltyPoints = totals.loyaltyPoints;
 
   // Update Loyalty points
-  const pointsSpent = appliedLoyaltyPoints;
-  const newLoyaltyBalance = userLoyaltyPoints - pointsSpent + pointsEarned;
+  const pointsSpent = totals.loyaltyPoints;
+  const newLoyaltyBalance = userLoyaltyPoints - pointsSpent + totals.pointsEarned;
 
   // Generate random order number
   const orderNum = "LMA-" + Math.floor(100000 + Math.random() * 900000);
@@ -1983,12 +2497,16 @@ function processCheckout() {
   const confirmNewBalance = document.getElementById("confirmNewBalance");
 
   if (confirmOrderNo) confirmOrderNo.textContent = orderNum;
-  if (confirmSubtotal) confirmSubtotal.textContent = `$${subtotal.toLocaleString()}`;
+  if (confirmSubtotal) confirmSubtotal.textContent = formatCurrency(totals.subtotal);
   
   if (confirmPromoDiscountRow && confirmPromoDiscount) {
-    if (promoDiscount > 0) {
+    if (totals.totalPromoDiscount > 0) {
+      const promoCodes = [
+        totals.agentforceDiscount > 0 ? AGENTFORCE_PROMO_CODE : "",
+        totals.manualDiscount > 0 ? activeDiscountCode : ""
+      ].filter(Boolean).join(", ");
       confirmPromoDiscountRow.style.display = "flex";
-      confirmPromoDiscount.textContent = `-$${promoDiscount.toLocaleString()} (${activeDiscountCode})`;
+      confirmPromoDiscount.textContent = `-${formatCurrency(totals.totalPromoDiscount)} (${promoCodes})`;
     } else {
       confirmPromoDiscountRow.style.display = "none";
     }
@@ -1998,18 +2516,18 @@ function processCheckout() {
     if (pointsSpent > 0) {
       confirmLoyaltyDiscountRow.style.display = "flex";
       confirmPointsSpent.textContent = pointsSpent;
-      confirmLoyaltyDiscount.textContent = `-$${finalLoyaltyDiscount.toLocaleString()}`;
+      confirmLoyaltyDiscount.textContent = `-${formatCurrency(totals.loyaltyDiscount)}`;
     } else {
       confirmLoyaltyDiscountRow.style.display = "none";
     }
   }
 
-  if (confirmTotal) confirmTotal.textContent = `$${total.toLocaleString()}`;
-  if (confirmPointsGained) confirmPointsGained.textContent = `+${pointsEarned.toLocaleString()} points`;
+  if (confirmTotal) confirmTotal.textContent = formatCurrency(totals.total);
+  if (confirmPointsGained) confirmPointsGained.textContent = `+${totals.pointsEarned.toLocaleString()} points`;
   if (confirmNewBalance) confirmNewBalance.textContent = `${newLoyaltyBalance.toLocaleString()} points`;
 
   // Log order to purchase history
-  const orderItems = cart.map(item => {
+  const orderItems = checkoutItems.map(item => {
     const product = findProductByCode(item.productId);
     if (!product) return null;
     const isService = isServiceProduct(product);
@@ -2026,11 +2544,15 @@ function processCheckout() {
     orderId: orderNum,
     date: new Date().toISOString().split('T')[0],
     items: orderItems,
-    subtotal: subtotal,
-    discount: promoDiscount,
-    loyaltyDiscount: finalLoyaltyDiscount,
-    total: total,
-    pointsEarned: pointsEarned
+    subtotal: totals.subtotal,
+    discount: totals.totalPromoDiscount,
+    discountCode: [
+      totals.agentforceDiscount > 0 ? AGENTFORCE_PROMO_CODE : "",
+      totals.manualDiscount > 0 ? activeDiscountCode : ""
+    ].filter(Boolean).join(", "),
+    loyaltyDiscount: totals.loyaltyDiscount,
+    total: totals.total,
+    pointsEarned: totals.pointsEarned
   };
 
   initPurchaseHistory();
@@ -2040,14 +2562,29 @@ function processCheckout() {
   // Apply state updates
   saveLoyaltyPoints(newLoyaltyBalance);
 
-  // Clear cart and states
-  cart = [];
+  // Remove only the items selected for checkout.
+  removeCartItemsByKeys(checkoutItemKeys);
   appliedLoyaltyPoints = 0;
-  localStorage.removeItem("lumina_cart_id");
-  saveCart(true); // This will close active promo and render empty cart
+  activeDiscount = 0;
+  activeDiscountCode = "";
+  localStorage.setItem("lumina_active_discount", JSON.stringify({
+    percent: activeDiscount,
+    code: activeDiscountCode
+  }));
 
-  // Close cart drawer
-  closeCart();
+  if (checkoutAllCarts) {
+    loadAllCarts();
+  } else if (checkoutCartId) {
+    loadCartById(checkoutCartId);
+  } else {
+    updateCartCount();
+    renderCartDrawer();
+  }
+  resetCartSelection();
+
+  if (isCartHash()) {
+    renderCartPage();
+  }
 
   // Open confirmation modal
   const confirmationOverlay = document.getElementById("confirmationOverlay");
@@ -2059,17 +2596,24 @@ function processCheckout() {
 
 
 // Modal Toggle Helpers
-function openCart() {
-  let cartId = localStorage.getItem("lumina_cart_id");
-  if (!cartId) {
-    cartId = "CRT-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-    localStorage.setItem("lumina_cart_id", cartId);
+function openCart(cartId = "") {
+  if (cartId && typeof cartId === "object" && typeof cartId.preventDefault === "function") {
+    cartId.preventDefault();
   }
-  const itemsParam = getCartItemsQueryParam();
-  window.location.hash = `#/cart/${cartId}${itemsParam ? '?' + itemsParam : ''}`;
+
+  loadAllCarts();
+  document.getElementById("cartOverlay")?.classList.remove("active");
+
+  if (window.location.hash !== "#cart") {
+    window.location.hash = "#cart";
+  } else {
+    renderCartPage();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 }
+
 function closeCart() {
-  if (window.location.hash.startsWith("#/cart")) {
+  if (isCartHash()) {
     window.location.hash = "#";
   } else {
     document.getElementById("cartOverlay")?.classList.remove("active");
@@ -2108,86 +2652,6 @@ function showToast(message, type = "info") {
   }, 3500);
 }
 
-// --- Cart URL Query Serialization & Restores ---
-function getHashParams() {
-  const hash = window.location.hash;
-  const questionMarkIndex = hash.indexOf('?');
-  if (questionMarkIndex === -1) return {};
-  
-  const searchParams = new URLSearchParams(hash.substring(questionMarkIndex + 1));
-  const params = {};
-  for (const [key, value] of searchParams.entries()) {
-    params[key] = value;
-  }
-  return params;
-}
-
-function restoreCartFromQuery(itemsStr) {
-  if (!itemsStr) return;
-  try {
-    const items = itemsStr.split(',').map(item => {
-      const parts = item.split(':');
-      const productId = parts[0];
-      const quantity = parseInt(parts[1], 10) || 1;
-      const metal = parts[2] ? decodeURIComponent(parts[2]).replace(/-/g, ' ') : null;
-      const size = parts[3] ? decodeURIComponent(parts[3]).replace(/-/g, ' ') : null;
-      const source = parts[4] ? decodeURIComponent(parts[4]) : "email";
-      return { productId, quantity, metal, size, source };
-    });
-    
-    if (items.length > 0) {
-      cart = items;
-      localStorage.setItem("lumina_cart", JSON.stringify(cart));
-      updateCartCount();
-      renderCartDrawer();
-    }
-  } catch (e) {
-    console.error("Failed to restore cart from URL query parameters:", e);
-  }
-}
-
-function restoreDummyCart(cartId) {
-  console.log("[Cart Restore] Restoring dummy cart items for cart ID: " + cartId);
-  cart = [
-    {
-      productId: "prod-1",
-      quantity: 1,
-      metal: "18K Yellow Gold",
-      size: "7",
-      source: "email"
-    },
-    {
-      productId: "ENGRAVE-05",
-      quantity: 1,
-      metal: "Service",
-      size: "N/A",
-      source: "email"
-    }
-  ];
-  
-  localStorage.setItem("lumina_cart_id", cartId);
-  localStorage.setItem("lumina_cart", JSON.stringify(cart));
-  updateCartCount();
-  renderCartDrawer();
-  
-  setTimeout(() => {
-    showToast(`Cart ${cartId} retrieved from CRM session (Simulated)`, "success");
-  }, 100);
-}
-
-function getCartItemsQueryParam() {
-  if (cart.length === 0) return "";
-  const itemsStr = cart.map(item => {
-    const productId = item.productId;
-    const qty = item.quantity;
-    const metal = encodeURIComponent((item.metal || "").replace(/\s+/g, '-'));
-    const size = encodeURIComponent((item.size || "").replace(/\s+/g, '-'));
-    const source = encodeURIComponent(item.source || "storefront");
-    return `${productId}:${qty}:${metal}:${size}:${source}`;
-  }).join(",");
-  return `items=${itemsStr}`;
-}
-
 function transmitCartIdToCRM(cartId) {
   window.luminaCartId = cartId;
   console.log("%c[CRM Sync] Transmitting Cart ID to Salesforce/CRM: " + cartId, "color: #C5A880; font-weight: bold;");
@@ -2215,7 +2679,9 @@ function renderCartPage() {
   const container = document.getElementById("cartPageSection");
   if (!container) return;
 
-  if (cart.length === 0) {
+  const cartItems = cart.map(getCartItemDisplayModel).filter(Boolean);
+
+  if (cartItems.length === 0) {
     container.innerHTML = `
       <div class="breadcrumbs container">
         <a href="#">Home</a> &gt; <span>Shopping Bag</span>
@@ -2229,84 +2695,134 @@ function renderCartPage() {
     return;
   }
 
-  let subtotal = 0;
-  const itemsHTML = cart.map(item => {
-    const product = findProductByCode(item.productId);
-    if (!product) return "";
+  syncCartSelection();
 
-    const isService = isServiceProduct(product);
-    const itemMetal = isService ? "Service" : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
-    const itemSize = isService ? "N/A" : (item.size || "7");
-    const adjustedPrice = getAdjustedPrice(product, itemMetal);
-    subtotal += adjustedPrice * item.quantity;
-    const initials = getInitials(product.name);
-    const itemMeta = isService ? "Services" : `${itemMetal} | Size ${itemSize}`;
+  const groupedItems = {
+    web: cartItems.filter(model => model.source !== "agentforce"),
+    agentforce: cartItems.filter(model => model.source === "agentforce")
+  };
+  const selectedItems = getSelectedCartItems();
+  let totals = calculateCartTotals(selectedItems);
+  if (appliedLoyaltyPoints !== totals.loyaltyPoints) {
+    appliedLoyaltyPoints = totals.loyaltyPoints;
+    totals = calculateCartTotals(selectedItems);
+  }
+
+  const selectedQuantity = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  const renderCartItem = model => {
+    const { item, product, itemMetal, itemSize, unitPrice, itemCartId, source, key, initials, isService } = model;
+    const isChecked = selectedCartItemKeys.has(key);
+    const cartActionArg = itemCartId ? `, '${escapeJsString(itemCartId)}'` : "";
+    const itemMeta = [
+      isService ? "Services" : `${itemMetal} | Size ${itemSize}`,
+      viewingAllCarts && itemCartId ? `Cart ${itemCartId}` : ""
+    ].filter(Boolean).join(" | ");
+    const productName = escapeHtml(product.name);
+    const productTitle = isService
+      ? `<span>${productName}</span>`
+      : `<a href="#/product/${encodeURIComponent(product.id)}">${productName}</a>`;
 
     return `
-      <div class="cart-page-item">
+      <div class="cart-page-item ${source}">
+        <label class="cart-page-item-select">
+          <input type="checkbox" class="cart-page-item-checkbox" aria-label="Select ${productName}" ${isChecked ? "checked" : ""} onchange="toggleCartItemSelection('${escapeJsString(key)}', this.checked)">
+          <span class="sr-only">Select ${productName}</span>
+        </label>
         <div class="cart-page-item-img-container">
-          <img src="${product.image}" alt="${product.name}" class="cart-page-item-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <img src="${escapeHtml(product.image)}" alt="${productName}" class="cart-page-item-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
           <div class="card-img-fallback" style="display:none; font-size:0.8rem; padding:0.5rem; border-radius:4px; width:90px; height:90px; align-items:center; justify-content:center;">
-            <div class="fallback-initials" style="font-size:1.5rem; margin-bottom:0;">${initials}</div>
+            <div class="fallback-initials" style="font-size:1.5rem; margin-bottom:0;">${escapeHtml(initials)}</div>
           </div>
         </div>
         <div class="cart-page-item-details">
-          <div class="cart-page-item-name"><a href="#/product/${product.id}">${product.name}</a></div>
-          <div class="cart-page-item-meta">${itemMeta}</div>
-          <div class="cart-page-item-price">$${adjustedPrice.toLocaleString()}</div>
+          <div class="cart-page-item-name">${productTitle}</div>
+          <div class="cart-page-item-meta">${escapeHtml(itemMeta)}</div>
+          <div class="cart-page-item-price">${formatCurrency(unitPrice)}</div>
         </div>
         <div class="cart-page-item-actions">
           <div class="cart-page-item-qty">
-            <button class="qty-btn" onclick="changeQty('${product.id}', '${itemMetal}', '${itemSize}', -1)">-</button>
+            <button class="qty-btn" onclick="changeQty('${escapeJsString(product.id)}', '${escapeJsString(itemMetal)}', '${escapeJsString(itemSize)}', -1${cartActionArg})">-</button>
             <span class="qty-value">${item.quantity}</span>
-            <button class="qty-btn" onclick="changeQty('${product.id}', '${itemMetal}', '${itemSize}', 1)">+</button>
+            <button class="qty-btn" onclick="changeQty('${escapeJsString(product.id)}', '${escapeJsString(itemMetal)}', '${escapeJsString(itemSize)}', 1${cartActionArg})">+</button>
           </div>
-          <button class="cart-page-item-remove" onclick="removeFromCart('${product.id}', '${itemMetal}', '${itemSize}')">
+          <button class="cart-page-item-remove" onclick="removeFromCart('${escapeJsString(product.id)}', '${escapeJsString(itemMetal)}', '${escapeJsString(itemSize)}'${cartActionArg})">
             Remove
           </button>
         </div>
       </div>
     `;
-  }).join("");
+  };
 
-  let discount = 0;
-  let discountRowHTML = "";
-  if (activeDiscount > 0) {
-    discount = subtotal * (activeDiscount / 100);
-    discountRowHTML = `
-      <div class="cart-summary-row discount">
-        <span>Discount (${activeDiscountCode})</span>
-        <span class="discount-tag">-$${discount.toLocaleString()}</span>
-      </div>
+  const renderSourceGroup = (source, label, items) => {
+    if (items.length === 0) return "";
+
+    const itemKeys = items.map(model => model.key);
+    const selectedCount = itemKeys.filter(key => selectedCartItemKeys.has(key)).length;
+    const allSelected = selectedCount === itemKeys.length;
+    const isMixed = selectedCount > 0 && !allSelected;
+    const itemCount = items.reduce((sum, model) => sum + model.item.quantity, 0);
+
+    return `
+      <section class="cart-source-group ${source}">
+        <label class="cart-source-header">
+          <input type="checkbox" class="cart-source-checkbox" data-cart-group-checkbox="${source}" data-indeterminate="${isMixed}" aria-label="Select all ${label} items" ${allSelected ? "checked" : ""} onchange="toggleCartGroupSelection('${source}', this.checked)">
+          <span class="cart-source-copy">
+            <span class="cart-source-title">${label}</span>
+            <span class="cart-source-subtitle">${itemCount} item${itemCount === 1 ? "" : "s"} in this section</span>
+          </span>
+          ${source === "agentforce" ? `<span class="cart-source-voucher">Voucher ${AGENTFORCE_PROMO_CODE}</span>` : ""}
+        </label>
+        <div class="cart-source-items">
+          ${items.map(renderCartItem).join("")}
+        </div>
+      </section>
     `;
-  }
+  };
 
-  const maxDiscountCash = subtotal - discount;
-  const maxPointsNeeded = Math.ceil(maxDiscountCash / 0.10);
-  const maxPointsUserCanSpend = Math.min(userLoyaltyPoints, maxPointsNeeded);
-  
-  if (appliedLoyaltyPoints > maxPointsUserCanSpend) {
-    appliedLoyaltyPoints = maxPointsUserCanSpend;
-  }
-  if (appliedLoyaltyPoints < 0) {
-    appliedLoyaltyPoints = 0;
-  }
+  const renderedGroups = [
+    renderSourceGroup("web", "WEB Cart", groupedItems.web),
+    renderSourceGroup("agentforce", "Agentforce Cart", groupedItems.agentforce)
+  ].filter(Boolean);
+  const itemsHTML = renderedGroups.join('<div class="cart-source-divider" aria-hidden="true"></div>');
 
-  const loyaltyDiscount = appliedLoyaltyPoints * 0.10;
-  const finalLoyaltyDiscount = Math.min(loyaltyDiscount, maxDiscountCash);
-  
-  let loyaltyDiscountRowHTML = "";
-  if (appliedLoyaltyPoints > 0) {
-    loyaltyDiscountRowHTML = `
-      <div class="cart-summary-row discount">
-        <span>Loyalty Points Redeemed (${appliedLoyaltyPoints} pts)</span>
-        <span class="discount-tag">-$${finalLoyaltyDiscount.toLocaleString()}</span>
-      </div>
-    `;
-  }
+  const agentforceVoucherHTML = groupedItems.agentforce.length > 0 ? `
+    <div class="agentforce-voucher-note">
+      <span class="agentforce-voucher-code">${AGENTFORCE_PROMO_CODE}</span>
+      <span>applies only to selected Agentforce items.</span>
+    </div>
+  ` : "";
+  const selectedSummaryItemsHTML = selectedItems.length > 0
+    ? selectedItems.map(item => {
+      const model = getCartItemDisplayModel(item);
+      if (!model) return "";
 
-  const total = subtotal - discount - finalLoyaltyDiscount;
-  const pointsEarned = Math.max(0, Math.floor(total));
+      const linePricing = getCartItemLinePricing(item);
+      const itemName = `${model.product.name}${model.item.quantity > 1 ? ` x${model.item.quantity}` : ""}`;
+      const priceHTML = linePricing.discount > 0
+        ? `
+          <span class="summary-item-price discounted">
+            <span class="summary-original-price">${formatCurrency(linePricing.original)}</span>
+            <span class="summary-discounted-price">${formatCurrency(linePricing.final)}</span>
+          </span>
+        `
+        : `<span class="summary-item-price">${formatCurrency(linePricing.original)}</span>`;
+
+      return `
+        <div class="summary-selected-item">
+          <span class="summary-selected-name">${escapeHtml(itemName)}</span>
+          ${priceHTML}
+        </div>
+      `;
+    }).join("")
+    : `<div class="summary-selected-empty">No selected items</div>`;
+  const totalSaved = totals.totalPromoDiscount + totals.loyaltyDiscount;
+  const manualPromoAppliedHTML = activeDiscountCode === "WELCOME15" ? `
+    <div class="manual-promo-applied">
+      <span>${activeDiscountCode} applied to website cart items</span>
+      <button type="button" class="btn-remove-promo" onclick="removePagePromo()">Remove</button>
+    </div>
+  ` : "";
 
   container.innerHTML = `
     <div class="breadcrumbs container">
@@ -2327,24 +2843,36 @@ function renderCartPage() {
           
           <div class="summary-section">
             <div class="cart-summary-row">
-              <span>Subtotal</span>
-              <span>$${subtotal.toLocaleString()}</span>
+              <span>Selected Items</span>
+              <span>${selectedQuantity}</span>
             </div>
-            ${discountRowHTML}
-            ${loyaltyDiscountRowHTML}
+            <div class="summary-selected-list">
+              ${selectedSummaryItemsHTML}
+            </div>
+            <div class="cart-summary-row">
+              <span>Subtotal</span>
+              <span>${formatCurrency(totals.subtotal)}</span>
+            </div>
+            <div class="cart-summary-row discount">
+              <span>Saved</span>
+              <span class="discount-tag">${totalSaved > 0 ? "-" : ""}${formatCurrency(totalSaved)}</span>
+            </div>
             <div class="cart-summary-row total">
               <span>Total</span>
-              <strong>$${total.toLocaleString()}</strong>
+              <strong>${formatCurrency(totals.total)}</strong>
             </div>
           </div>
 
-          <div class="summary-card-box">
+          <div class="summary-card-box summary-promo-box">
             <label for="pagePromoInput" class="box-label">Promo Code</label>
             <div class="promo-code-box">
-              <input type="text" id="pagePromoInput" class="promo-input" placeholder="e.g. WELCOME15" value="${activeDiscountCode || ''}">
-              <button id="btnPageApplyPromo" class="btn-apply-promo" onclick="applyPagePromo()">Apply</button>
+              <input type="text" id="pagePromoInput" class="promo-input" placeholder="e.g. WELCOME15" value="${activeDiscountCode === "WELCOME15" ? activeDiscountCode : ""}">
+              <button type="button" id="btnPageApplyPromo" class="btn-apply-promo" onclick="applyPagePromo()">Apply</button>
             </div>
+            ${manualPromoAppliedHTML}
           </div>
+
+          ${agentforceVoucherHTML}
 
           <div class="summary-card-box loyalty-redeem-box">
             <div class="loyalty-info-row">
@@ -2352,7 +2880,7 @@ function renderCartPage() {
               <span id="pageLoyaltyBalanceText" class="loyalty-balance-tag">${userLoyaltyPoints.toLocaleString()} pts ($${(userLoyaltyPoints * 0.10).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}) available</span>
             </div>
             <div class="loyalty-input-row">
-              <input type="number" id="pageLoyaltyInput" class="loyalty-input" min="0" max="${maxPointsUserCanSpend}" placeholder="Points to spend" value="${appliedLoyaltyPoints || ''}">
+              <input type="number" id="pageLoyaltyInput" class="loyalty-input" min="0" max="${totals.maxPointsUserCanSpend}" placeholder="Points to spend" value="${appliedLoyaltyPoints || ''}">
               <button id="btnPageApplyLoyalty" class="btn-apply-loyalty" onclick="applyPageLoyalty()">Apply</button>
               <button id="btnPageUseMaxLoyalty" class="btn-use-max-loyalty" onclick="usePageMaxLoyalty()">Max</button>
             </div>
@@ -2362,102 +2890,118 @@ function renderCartPage() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="loyalty-star-icon">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
             </svg>
-            <span>You will earn <strong id="pageCartPointsEarned">${pointsEarned.toLocaleString()}</strong> loyalty points</span>
+            <span>You will earn <strong id="pageCartPointsEarned">${totals.pointsEarned.toLocaleString()}</strong> loyalty points</span>
           </div>
 
-          <button class="btn-primary btn-checkout" id="btnPageCheckout" onclick="checkoutPage()">Secure Checkout</button>
+          <button class="btn-primary btn-checkout" id="btnPageCheckout" onclick="checkoutPage()" ${selectedItems.length === 0 ? "disabled" : ""}>Secure Checkout</button>
         </div>
       </div>
     </div>
   `;
+
+  container.querySelectorAll("[data-cart-group-checkbox]").forEach(input => {
+    input.indeterminate = input.dataset.indeterminate === "true";
+  });
 }
 
 // Expose functions globally for onclick bindings
 window.applyPagePromo = function() {
   const input = document.getElementById("pagePromoInput");
-  if (input && input.value) {
-    if (applyPromoCode(input.value)) {
-      input.value = "";
-    }
+  const code = String(input?.value || "").trim();
+
+  if (!code) {
+    showToast("Enter a promo code", "error");
+    return;
   }
+
+  if (applyPromoCode(code)) {
+    renderCartPage();
+  }
+};
+
+window.removePagePromo = function() {
+  removePromoCode();
+  renderCartPage();
 };
 
 window.applyPageLoyalty = function() {
   const loyaltyInput = document.getElementById("pageLoyaltyInput");
   if (!loyaltyInput) return;
+  const selectedItems = getSelectedCartItems();
+  if (selectedItems.length === 0) {
+    showToast("Select at least one item before applying points", "error");
+    return;
+  }
+
   const val = parseInt(loyaltyInput.value, 10);
   if (isNaN(val) || val < 0) {
     showToast("Please enter a valid amount of points", "error");
     return;
   }
   
-  let subtotal = 0;
-  cart.forEach(item => {
-    const product = findProductByCode(item.productId);
-    if (product) {
-      const itemMetal = isServiceProduct(product) ? "Service" : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
-      const adjustedPrice = getAdjustedPrice(product, itemMetal);
-      subtotal += adjustedPrice * item.quantity;
-    }
-  });
-  
-  let promoDiscount = 0;
-  if (activeDiscount > 0) {
-    promoDiscount = subtotal * (activeDiscount / 100);
-  }
-  
-  const maxDiscountCash = subtotal - promoDiscount;
-  const maxPointsNeeded = Math.ceil(maxDiscountCash / 0.10);
-  const maxPointsUserCanSpend = Math.min(userLoyaltyPoints, maxPointsNeeded);
+  const totals = calculateCartTotals(selectedItems);
 
   if (val > userLoyaltyPoints) {
     showToast(`You only have ${userLoyaltyPoints} points available`, "error");
-    appliedLoyaltyPoints = maxPointsUserCanSpend;
-  } else if (val > maxPointsNeeded) {
-    showToast(`Capped points to max needed: ${maxPointsNeeded} pts`, "info");
-    appliedLoyaltyPoints = maxPointsNeeded;
+    appliedLoyaltyPoints = totals.maxPointsUserCanSpend;
+  } else if (val > totals.maxPointsNeeded) {
+    showToast(`Capped points to max needed: ${totals.maxPointsNeeded} pts`, "info");
+    appliedLoyaltyPoints = totals.maxPointsNeeded;
   } else {
     appliedLoyaltyPoints = val;
     showToast(`Applied ${appliedLoyaltyPoints} loyalty points!`, "success");
   }
   
-  saveCart();
+  renderCartPage();
 };
 
 window.usePageMaxLoyalty = function() {
-  let subtotal = 0;
-  cart.forEach(item => {
-    const product = findProductByCode(item.productId);
-    if (product) {
-      const itemMetal = isServiceProduct(product) ? "Service" : (item.metal || (product.name.toLowerCase().includes("platinum") ? "Platinum" : "18K Yellow Gold"));
-      const adjustedPrice = getAdjustedPrice(product, itemMetal);
-      subtotal += adjustedPrice * item.quantity;
-    }
-  });
-  
-  let promoDiscount = 0;
-  if (activeDiscount > 0) {
-    promoDiscount = subtotal * (activeDiscount / 100);
+  const selectedItems = getSelectedCartItems();
+  if (selectedItems.length === 0) {
+    showToast("Select at least one item before applying points", "error");
+    return;
   }
-  
-  const maxDiscountCash = subtotal - promoDiscount;
-  const maxPointsNeeded = Math.ceil(maxDiscountCash / 0.10);
-  const maxPointsUserCanSpend = Math.min(userLoyaltyPoints, maxPointsNeeded);
 
-  if (maxPointsUserCanSpend <= 0) {
+  const totals = calculateCartTotals(selectedItems);
+
+  if (totals.maxPointsUserCanSpend <= 0) {
     showToast("No points can be applied to this order", "error");
     appliedLoyaltyPoints = 0;
   } else {
-    appliedLoyaltyPoints = maxPointsUserCanSpend;
+    appliedLoyaltyPoints = totals.maxPointsUserCanSpend;
     showToast(`Applied maximum possible points: ${appliedLoyaltyPoints} pts`, "success");
   }
-  saveCart();
+  renderCartPage();
 };
 
 window.checkoutPage = function() {
-  if (cart.length === 0) {
-    showToast("Your cart is empty", "error");
+  if (getSelectedCartItems().length === 0) {
+    showToast("Select at least one item to checkout", "error");
     return;
   }
   processCheckout();
+};
+
+window.toggleCartItemSelection = function(key, checked) {
+  hasManualCartSelection = true;
+  if (checked) {
+    selectedCartItemKeys.add(key);
+  } else {
+    selectedCartItemKeys.delete(key);
+  }
+  renderCartPage();
+};
+
+window.toggleCartGroupSelection = function(source, checked) {
+  hasManualCartSelection = true;
+  cart.forEach(item => {
+    if (getCartItemSource(item) !== source) return;
+    const key = getCartItemKey(item);
+    if (checked) {
+      selectedCartItemKeys.add(key);
+    } else {
+      selectedCartItemKeys.delete(key);
+    }
+  });
+  renderCartPage();
 };
