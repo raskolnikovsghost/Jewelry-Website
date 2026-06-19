@@ -3,7 +3,7 @@ const DEFAULT_PRODUCTS = [
   {
     id: "prod-1",
     name: "Gold Solitaire Diamond Ring",
-    price: 4500,
+    price: 3800,
     category: "Rings",
     description: "A brilliant round solitaire diamond set in an elegant 18k yellow gold band. A timeless symbol of love.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug.png",
@@ -13,7 +13,7 @@ const DEFAULT_PRODUCTS = [
   {
     id: "prod-2",
     name: "Platinum Diamond Halo Ring",
-    price: 5800,
+    price: 3500,
     category: "Rings",
     description: "A stunning round-cut diamond framed by a delicate halo of sparkling micro-pavé diamonds on a polished platinum band.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (1).png",
@@ -23,7 +23,7 @@ const DEFAULT_PRODUCTS = [
   {
     id: "prod-3",
     name: "Gold Three-Stone Ring",
-    price: 6400,
+    price: 3900,
     category: "Rings",
     description: "An exquisite round-cut diamond flanked by two matching side diamonds on an 18k yellow gold band, representing past, present, and future.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (2).png",
@@ -33,7 +33,7 @@ const DEFAULT_PRODUCTS = [
   {
     id: "prod-4",
     name: "Platinum Pavé Diamond Band",
-    price: 3200,
+    price: 2400,
     category: "Rings",
     description: "A half-eternity wedding band encrusted with three rows of brilliant pavé-set diamonds in polished platinum.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (3).png",
@@ -43,7 +43,7 @@ const DEFAULT_PRODUCTS = [
   {
     id: "prod-5",
     name: "Gold Eternity Diamond Ring",
-    price: 4200,
+    price: 2800,
     category: "Rings",
     description: "A solid 18k yellow gold eternity band set with a continuous circle of brilliant-cut diamonds, symbolizing eternal devotion.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (4).png",
@@ -53,7 +53,7 @@ const DEFAULT_PRODUCTS = [
   {
     id: "prod-6",
     name: "Marquise Cut Solitaire Ring",
-    price: 5500,
+    price: 1450,
     category: "Rings",
     description: "A striking marquise-cut diamond set in a classic four-prong platinum band to elongate the finger and capture light.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (5).png",
@@ -63,7 +63,7 @@ const DEFAULT_PRODUCTS = [
   {
     id: "prod-7",
     name: "Princess Cut Solitaire Ring",
-    price: 4900,
+    price: 1250,
     category: "Rings",
     description: "A classic princess-cut square diamond mounted on a sleek 18k yellow gold band for a modern, architectural look.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (6).png",
@@ -73,7 +73,7 @@ const DEFAULT_PRODUCTS = [
   {
     id: "prod-8",
     name: "Cushion Cut Halo Ring",
-    price: 6100,
+    price: 1150,
     category: "Rings",
     description: "A soft cushion-cut diamond bordered by a sparkling halo of diamonds, set on a thin platinum band.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (7).png",
@@ -83,7 +83,7 @@ const DEFAULT_PRODUCTS = [
   {
     id: "prod-9",
     name: "Vintage Filigree Bezel Ring",
-    price: 3800,
+    price: 1800,
     category: "Rings",
     description: "An intricate, antique-inspired gold ring featuring filigree details and an octagonal bezel-set diamond.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (8).png",
@@ -93,7 +93,7 @@ const DEFAULT_PRODUCTS = [
   {
     id: "prod-10",
     name: "Bezel Solitaire Platinum Ring",
-    price: 4700,
+    price: 2100,
     category: "Rings",
     description: "A contemporary round solitaire diamond encased in a protective, modern bezel setting on a polished platinum band.",
     image: "images/Gemini_Generated_Image_qiugelqiugelqiug (9).png",
