@@ -171,12 +171,12 @@ function initProducts() {
   if (stored) {
     try {
       const parsed = JSON.parse(stored);
-      // Force reset if catalog doesn't contain exactly 10 products, doesn't use Gemini images, has non-ring categories, or needs price update
-      const hasNonRing = Array.isArray(parsed) && parsed.some(p => p.category !== "Rings");
+      // Force reset if catalog doesn't contain exactly the default product count, doesn't use Gemini images, has invalid categories, or needs price update
+      const hasInvalidCategory = Array.isArray(parsed) && parsed.some(p => p.category !== "Rings" && p.category !== "Services");
       const firstProduct = Array.isArray(parsed) && parsed.find(p => p.id === "prod-1");
       const needsPriceUpdate = firstProduct && firstProduct.price !== 3800;
       
-      if (!Array.isArray(parsed) || parsed.length !== 10 || !parsed[0].image.includes("Gemini_Generated") || hasNonRing || needsPriceUpdate) {
+      if (!Array.isArray(parsed) || parsed.length !== DEFAULT_PRODUCTS.length || !parsed[0].image.includes("Gemini_Generated") || hasInvalidCategory || needsPriceUpdate) {
         needsReset = true;
       } else {
         products = parsed;
