@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wine Finder | Find Where to Buy in Australia</title>
+<meta name="description" content="Search for a wine by producer/label and vintage and jump straight to where you can buy it from Australian retailers.">
+<link rel="stylesheet" href="wine-finder.css">
+</head>
+<body>
+
+  <header class="wf-header">
+    <div class="wf-container">
+      <a href="index.html" class="wf-logo">Wine<span>Finder</span></a>
+      <p class="wf-tagline">Find where to buy a bottle in Australia</p>
+    </div>
+  </header>
+
+  <main class="wf-container">
+
+    <section class="wf-search-card">
+      <form id="wfForm" autocomplete="off">
+        <div class="wf-field">
+          <label for="wfName">Wine / producer / label</label>
+          <input type="text" id="wfName" name="wfName" placeholder="e.g. Penfolds Bin 389, Henschke Hill of Grace" required>
+        </div>
+
+        <div class="wf-row">
+          <div class="wf-field wf-field-small">
+            <label for="wfVintage">Vintage</label>
+            <input type="text" id="wfVintage" name="wfVintage" placeholder="e.g. 2019" inputmode="numeric" pattern="[0-9]{4}" maxlength="4">
+          </div>
+          <div class="wf-field wf-field-small">
+            <label for="wfRegion">Region <span class="wf-optional">(optional)</span></label>
+            <input type="text" id="wfRegion" name="wfRegion" placeholder="e.g. Barossa Valley">
+          </div>
+        </div>
+
+        <button type="submit" class="wf-btn">Find where to buy</button>
+      </form>
+    </section>
+
+    <section id="wfResults" class="wf-results" hidden>
+      <h2 id="wfResultsTitle">Results</h2>
+      <p class="wf-hint">
+        These are direct searches on each retailer/marketplace — we don't hold live stock or price data ourselves,
+        so results open in a new tab so you can compare price and availability.
+      </p>
+
+      <h3 class="wf-group-title">Price comparison</h3>
+      <div id="wfCompare" class="wf-link-grid"></div>
+
+      <h3 class="wf-group-title">Australian retailers</h3>
+      <div id="wfRetailers" class="wf-link-grid"></div>
+
+      <h3 class="wf-group-title">Specialist / fine wine merchants</h3>
+      <div id="wfSpecialists" class="wf-link-grid"></div>
+
+      <h3 class="wf-group-title">Auction &amp; secondary market <span class="wf-optional">(older / rare vintages)</span></h3>
+      <div id="wfAuctions" class="wf-link-grid"></div>
+    </section>
+
+    <section class="wf-recent" id="wfRecentSection" hidden>
+      <h3 class="wf-group-title">Recent searches</h3>
+      <div id="wfRecent" class="wf-recent-list"></div>
+    </section>
+
+    <p class="wf-disclaimer">
+      Wine Finder is a search-link generator, not a live inventory or price feed. Availability, pricing and vintage
+      accuracy are set by each retailer — always confirm on their site before purchasing. Please drink responsibly.
+      Liquor is not sold to anyone under 18 in Australia.
+    </p>
+
+  </main>
+
+  <script src="wine-finder.js"></script>
+</body>
+</html>

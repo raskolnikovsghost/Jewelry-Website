@@ -1,0 +1,232 @@
+:root {
+  --wf-bg: #f7f5f2;
+  --wf-surface: #ffffff;
+  --wf-ink: #241b17;
+  --wf-ink-soft: #6b5f58;
+  --wf-wine: #6d1b2b;
+  --wf-wine-dark: #4a1220;
+  --wf-gold: #b78d3f;
+  --wf-border: #e6ded6;
+  --wf-radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  background: var(--wf-bg);
+  color: var(--wf-ink);
+  line-height: 1.5;
+}
+
+.wf-container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.wf-header {
+  background: linear-gradient(135deg, var(--wf-wine), var(--wf-wine-dark));
+  color: #fff;
+  padding: 36px 0 30px;
+}
+
+.wf-logo {
+  display: inline-block;
+  font-size: 1.6rem;
+  font-weight: bold;
+  color: #fff;
+  text-decoration: none;
+  letter-spacing: 0.5px;
+}
+
+.wf-logo span {
+  color: var(--wf-gold);
+  font-weight: normal;
+}
+
+.wf-tagline {
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  color: #e9d9d0;
+}
+
+main.wf-container {
+  padding-top: 28px;
+  padding-bottom: 60px;
+}
+
+.wf-search-card {
+  background: var(--wf-surface);
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  padding: 24px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
+}
+
+.wf-field {
+  margin-bottom: 16px;
+}
+
+.wf-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.wf-field-small {
+  flex: 1 1 160px;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: bold;
+  margin-bottom: 6px;
+  color: var(--wf-ink-soft);
+}
+
+.wf-optional {
+  font-weight: normal;
+  font-style: italic;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--wf-border);
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  background: #fdfcfb;
+  color: var(--wf-ink);
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--wf-wine);
+  box-shadow: 0 0 0 3px rgba(109, 27, 43, 0.12);
+}
+
+.wf-btn {
+  width: 100%;
+  padding: 13px;
+  background: var(--wf-wine);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: bold;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.wf-btn:hover {
+  background: var(--wf-wine-dark);
+}
+
+.wf-results {
+  margin-top: 34px;
+}
+
+.wf-results h2 {
+  margin-bottom: 4px;
+}
+
+.wf-hint {
+  color: var(--wf-ink-soft);
+  font-size: 0.88rem;
+  margin-top: 0;
+}
+
+.wf-group-title {
+  margin: 26px 0 12px;
+  font-size: 1rem;
+  color: var(--wf-wine-dark);
+  border-bottom: 1px solid var(--wf-border);
+  padding-bottom: 6px;
+}
+
+.wf-link-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.wf-link-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 14px;
+  background: var(--wf-surface);
+  border: 1px solid var(--wf-border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--wf-ink);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.wf-link-card:hover {
+  border-color: var(--wf-gold);
+  transform: translateY(-1px);
+}
+
+.wf-link-name {
+  font-weight: bold;
+  font-size: 0.95rem;
+}
+
+.wf-link-desc {
+  display: block;
+  font-weight: normal;
+  font-size: 0.78rem;
+  color: var(--wf-ink-soft);
+  margin-top: 2px;
+}
+
+.wf-link-arrow {
+  color: var(--wf-gold);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.wf-recent {
+  margin-top: 30px;
+}
+
+.wf-recent-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wf-recent-chip {
+  background: var(--wf-surface);
+  border: 1px solid var(--wf-border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: var(--wf-ink);
+}
+
+.wf-recent-chip:hover {
+  border-color: var(--wf-gold);
+}
+
+.wf-disclaimer {
+  margin-top: 40px;
+  font-size: 0.75rem;
+  color: var(--wf-ink-soft);
+  border-top: 1px solid var(--wf-border);
+  padding-top: 16px;
+}
+
+@media (max-width: 480px) {
+  .wf-header { padding: 26px 0 22px; }
+  .wf-search-card { padding: 18px; }
+}
